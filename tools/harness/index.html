@@ -36,6 +36,13 @@
     <button data-fx="unavailable">Fail-closed (inspector unreachable)</button>
     <button data-fx="scanning">Scanning chip</button>
     <button data-fx="feed">Push 40 fake decisions</button>
+    <br>
+    <button data-fx="image">Beat 3 — image, markers only</button>
+    <button data-fx="image-ocr">Beat 3 — + transcript</button>
+    <button data-fx="image-box">Beat 3 — + boxes on image</button>
+    <br>
+    <button data-fx="cascade">Cascade — escalated to T2</button>
+    <button data-fx="no-model">Cascade — no model called</button>
   </div>
 
 <script>
@@ -71,11 +78,17 @@
     'Ben Ako,ben.ako@northwind.example,+1-415-555-0199,Team,900\n' +
     'Chen Wu,chen.wu@northwind.example,+1-415-555-0117,Pro,4200';
 </script>
-<script src="../../extension/overlay.js"></script>
-<script src="../../extension/console.js"></script>
+<script>
+  // Cache-bust the two files under active development. python -m http.server serves
+  // Last-Modified and Chrome will happily reuse a stale overlay.js across a reload,
+  // which presents as "my CSS change did nothing" and costs ten minutes every time.
+  for (const f of ['overlay.js', 'console.js']) {
+    document.write('<script src="../../extension/' + f + '?t=' + Date.now() + '"><\/script>');
+  }
+</script>
 <script>
   const FX = {};
-  Promise.all(['block', 'allow'].map((n) =>
+  const FIXTURES = Promise.all(['block', 'allow'].map((n) =>
     fetch('../fixtures/verdict_' + n + '.json').then((r) => r.json()).then((j) => (FX[n] = j))
   )).then(() => console.log('fixtures loaded'));
 
@@ -118,7 +131,7 @@
 
   document.addEventListener('click', (e) => {
     const fx = e.target.dataset && e.target.dataset.fx;
-    if (fx) show(fx);
+    if (fx) (SHOTS[fx] || (() => show(fx)))();
   });
 
   // Capture states, one URL each — for the submission screenshots (Phase 3, due to C
@@ -131,8 +144,70 @@
   //   #console    console panel open, 40 decisions in the feed
   //   #slider     console open, threshold mid-drag at 0.42
   //   #unavailable  the fail-closed card
+  // A 320x180 PNG standing in for the FY26 chart, so the image beat can be styled with
+  // no server and no paste. Replaced on stage by the real data/images/demo asset.
+  function fakeChart() {
+    const c = document.createElement('canvas'); c.width = 640; c.height = 360;
+    const g = c.getContext('2d');
+    g.fillStyle = '#f7f7f5'; g.fillRect(0, 0, 640, 360);
+    g.fillStyle = '#1a1a1a'; g.font = 'bold 20px sans-serif';
+    g.fillText('FY26 Revenue Forecast — Plan vs. Commit', 24, 40);
+    const bars = [[120, 90], [180, 140], [240, 110], [300, 175], [360, 150], [420, 210]];
+    bars.forEach(([x, h], i) => {
+      g.fillStyle = i % 2 ? '#7aa7e8' : '#2f5fa8';
+      g.fillRect(x, 300 - h, 34, h);
+    });
+    g.strokeStyle = '#999'; g.beginPath(); g.moveTo(90, 300); g.lineTo(600, 300); g.stroke();
+    g.fillStyle = '#777'; g.font = '13px sans-serif';
+    g.fillText('Internal — Do Not Distribute', 24, 340);
+    return c.toDataURL('image/jpeg', 0.85).split(',')[1];
+  }
+  const IMG = { mime: 'image/jpeg', w: 640, h: 360, b64: fakeChart() };
+
+  const IMG_VERDICT = {
+    schema: 'airlock.verdict.v1', request_id: 'r_img', action: 'block',
+    label: 'FINANCIAL_NONPUBLIC', severity: 'HIGH', policy_clause_id: 'POL-006',
+    policy_clause_text: 'Non-public financial information, including forecasts, plan and commit figures, must not be disclosed before public release.',
+    reason: 'Chart of forward-looking revenue against plan. Markers: FY26 Revenue Forecast, Internal — Do Not Distribute',
+    evidence_spans: ['FY26 Revenue Forecast', 'Internal — Do Not Distribute'],
+    evidence_verified: true, score: 0.93, p_block: 0.93, threshold: 0.55,
+    tier: 'T3', model: 'airlock-vision/nemotron-3-nano-omni-30b', modality: 'image',
+    latency_ms: 912, bytes_egressed: 0, decision_id: 'img0001', score_details: null,
+  };
+
+  const OCR = ['FY26 Revenue Forecast — Plan vs. Commit', 'Q1 Q2 Q3 Q4 Q1 Q2',
+               'Plan  Commit', 'Internal — Do Not Distribute'];
+  const BOXES = [
+    { text: 'FY26 Revenue Forecast', x: 0.035, y: 0.06, w: 0.60, h: 0.10 },
+    { text: 'Internal — Do Not Distribute', x: 0.035, y: 0.885, w: 0.40, h: 0.075 },
+  ];
+
+  function showImage(level) {
+    const ui = window.__AIRLOCK_UI__;
+    const v = Object.assign({}, IMG_VERDICT);
+    if (level === 'ocr') v.extracted_text = OCR;
+    if (level === 'boxes') { v.extracted_text = OCR; v.evidence_boxes = BOXES; }
+    ui.scanning({ modality: 'image' });
+    setTimeout(() => ui.verdict(v, {
+      payloadText: '', images: [IMG], host: 'chatgpt.com', origin: 'https://chatgpt.com',
+    }), 320);
+  }
+
+  // tier_timings — the two cases worth seeing side by side
+  const TT_NO_MODEL = { cache: 0.4, T0: 0.01, T1: 0.31 };
+  const TT_MODEL    = { cache: 0.4, T0: 0.01, T1: 0.42, T2: 312 };
+
   const SHOTS = {
     block:       () => show('block'),
+    cascade:     () => { FX.block.tier_timings = TT_MODEL; show('block'); },
+    'no-model':  () => { FX.allow.tier_timings = TT_NO_MODEL;
+                         FX.block.tier_timings = TT_NO_MODEL;
+                         FX.block.tier = 'T1';
+                         FX.block.model = 'airlock-t1/deterministic';
+                         show('block'); },
+    image:       () => showImage('chips'),
+    'image-ocr': () => showImage('ocr'),
+    'image-box': () => showImage('boxes'),
     unavailable: () => show('unavailable'),
     evidence:    () => { show('block');
                          setTimeout(() => { const d = window.__AIRLOCK_UI__.root.querySelector('details.sd');
@@ -150,7 +225,9 @@
 
   function applyHash() {
     const fn = SHOTS[location.hash.replace('#', '')];
-    if (fn) setTimeout(fn, 250);       // let the fixtures finish loading
+    // Wait on the fixture promise rather than guessing at a delay — a fixed timeout
+    // races the fetch and the state silently renders empty.
+    if (fn) FIXTURES.then(fn);
   }
   window.addEventListener('hashchange', () => location.reload());
   applyHash();
