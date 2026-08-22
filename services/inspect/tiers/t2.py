@@ -13,10 +13,17 @@ import httpx
 
 from ..schemas import CLASSIFIER_SCHEMA
 
-CLF_BASE_URL = os.environ.get("AIRLOCK_CLF_URL", "http://127.0.0.1:8002/v1")
-# Request model NAME (--served-model-name), never a weights path. Two-server
-# demo config (stack/models.env): AIRLOCK_CLF_URL=:8000/v1 + CLF_MODEL=airlock-text.
-CLF_MODEL = os.environ.get("AIRLOCK_CLF_MODEL", "airlock-clf")
+# Defaults ARE the committed two-server config: T2 runs on the text server at
+# :8000. Previously this defaulted to :8002 — the server we deliberately do not
+# launch — so forgetting to source stack/models.env sent every escalation to a
+# dead port, timing out and fail-closing to BLOCK: an FPR near 1.0 that reads
+# exactly like a broken detector (RUN-DAY.md §2 called this the
+# highest-consequence check of the day). Defaulting to the config we actually
+# run removes the failure mode instead of documenting it.
+# Launching airlock-clf is the three-server case: set both vars explicitly.
+CLF_BASE_URL = os.environ.get("AIRLOCK_CLF_URL", "http://127.0.0.1:8000/v1")
+# Request model NAME (--served-model-name), never a weights path.
+CLF_MODEL = os.environ.get("AIRLOCK_CLF_MODEL", "airlock-text")
 T2_TIMEOUT_S = 1.2  # server internal budget for the T2 call (SRS §5.1)
 
 SYSTEM_PROMPT = """You are AIRLOCK, a local data-egress inspector. You classify a payload that an
