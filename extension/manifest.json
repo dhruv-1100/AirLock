@@ -1,0 +1,72 @@
+{
+  "manifest_version": 3,
+  "name": "Airlock",
+  "version": "0.1.0",
+  "description": "Inspects payloads locally before they leave the laptop for a cloud AI tool. Nothing is sent off the box.",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8787/*",
+    "http://localhost:8787/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "http://localhost:5173/*"
+  ],
+  "background": {
+    "service_worker": "sw.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "http://localhost:5173/*"
+      ],
+      "js": [
+        "overlay.js",
+        "console.js",
+        "airlock.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "ISOLATED"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "mainworld.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false,
+      "world": "MAIN"
+    }
+  ],
+  "action": {
+    "default_title": "Airlock \u2014 local egress control"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "scores_benign.json"
+      ],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "http://localhost:5173/*"
+      ]
+    }
+  ]
+}
