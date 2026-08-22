@@ -192,6 +192,52 @@ cross-ownership edit).
 
 ---
 
+# Round 4 — after A's `a1cffb2`
+
+A fixed both findings B raised. Both verified on the merged tree.
+
+## §9 escalation undercount — closed
+
+`ERR` is now counted as an escalation and incremented before the error return. Same
+scenario B originally reported (5 pastes, 3 escalating to a classifier that is down):
+
+```
+before:  tiers {"T0":1,"T1":1}            escalation_rate 0.0    <- 0% while 60% escalated
+after:   tiers {"T0":1,"T1":1,"ERR":3}    escalation_rate 0.6
+```
+
+The console renders 60% with `T0:1  T1:1  ERR:3` in the tooltip.
+
+## Perfectly-separated slider — fixed, but the committed artifact was stale
+
+A reshaped `make_synthetic_scores.py` so ~2% of benign items land in 0.30–0.80 and ~8%
+of sensitive items score low, giving the slider something to trade. Correct fix.
+
+The file committed alongside it was still generated at **n=50 / 20**, though, and at that
+size a 2% near-threshold band yields **zero** benign items in range — top benign score
+0.178, so FPR read 0.00% at every τ from 0.20 to 0.75. Recall moved; FPR did not. Half
+the slider was still inert.
+
+**Regenerated at the script's own documented defaults** (`--n 1000 --n-sensitive 400
+--seed 1337`, no arguments needed) and copied into both consoles. `INTEGRATION.md` calls
+`results/scores_benign.json` a regenerate-don't-merge artifact, so this is that, using
+A's script unmodified:
+
+```
+tau=0.20  FPR=4.70% (47/1000)  recall=97.5%
+tau=0.30  FPR=2.60% (26/1000)  recall=95.3%
+tau=0.42  FPR=1.40% (14/1000)  recall=92.8%
+tau=0.55  FPR=0.80% ( 8/1000)  recall=89.0%
+tau=0.75  FPR=0.20% ( 2/1000)  recall=76.3%
+```
+
+n=1000 is also the denominator the SRS requires for a reportable FPR, so the placeholder
+now rehearses the real thing at the real size. It still self-declares
+`corpus_is_real: false` and both consoles still show the PLACEHOLDER label — **these are
+demo-shaped numbers, not measurements, and nothing may quote them.**
+
+---
+
 ## Still open, owned elsewhere
 
 - `results/scores_benign.json` is the synthetic file from `bench/make_synthetic_scores.py`
