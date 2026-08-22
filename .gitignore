@@ -1,0 +1,16 @@
+# secrets — never commit
+.airlock_key
+.airlock_resume_token
+
+# generated corpora and results (regenerable with one seeded command)
+data/benign_v1.jsonl
+data/sensitive_v1.jsonl
+data/dumps/
+results/*.png
+results/*.log
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
