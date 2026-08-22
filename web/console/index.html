@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Airlock — live console</title>
+<!--
+  web/console/index.html — the projector console.
+
+  Standalone: no extension required. Served on http://localhost:5174, it talks
+  straight to http://127.0.0.1:8787 and ws://127.0.0.1:8787/v1/stream. Loopback to
+  loopback, so Local Network Access never enters the picture and this page keeps
+  working if anything about the extension's transport goes wrong.
+
+  Same data, same frames, same reconnect policy (250 ms -> 4 s) as the in-page panel.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0c0f; --panel: rgba(22,24,29,.92); --line: rgba(255,255,255,.09);
+    --fg: #e8eaed; --dim: #8a939d; --dimmer: #6b7280;
+    --blue: #6ea8fe; --green: #4ade80; --red: #f87171; --purple: #c084fc;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background:
+      radial-gradient(1100px 600px at 15% -10%, rgba(110,168,254,.07), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(192,132,252,.06), transparent 55%),
+      var(--bg);
+    color: var(--fg);
+    font: 14px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 15px 24px; border-bottom: 1px solid var(--line);
+  }
+  .brand { font-size: 17px; font-weight: 660; letter-spacing: -.015em; }
+  .brand span { color: var(--dim); font-weight: 400; }
+  .health { display: flex; align-items: center; gap: 7px; margin-left: auto;
+            font-size: 12px; color: var(--dim); }
+  .led { width: 9px; height: 9px; border-radius: 50%; background: var(--dimmer); }
+  .led.up { background: var(--green); box-shadow: 0 0 10px rgba(74,222,128,.55); }
+  .led.amber { background: #fbbf24; } .led.down { background: var(--red); }
+
+  .grid { flex: 1; display: grid; grid-template-columns: 1.55fr 1fr; gap: 18px;
+          padding: 18px 24px 24px; min-height: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+          display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .card > h2 {
+    margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line);
+    font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--dim); font-weight: 620; display: flex; align-items: center; gap: 9px;
+  }
+  .card > h2 .n { margin-left: auto; font-variant-numeric: tabular-nums; letter-spacing: 0;
+                  text-transform: none; font-weight: 500; }
+  .side { display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+
+  /* feed */
+  #feed { flex: 1; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 12px; line-height: 1.95; padding: 6px 0; }
+  #feed::-webkit-scrollbar { width: 8px; }
+  #feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 8px; }
+  .ln { display: grid; grid-template-columns: 74px 1fr 96px 66px 64px 40px 66px;
+        gap: 10px; padding: 0 16px; white-space: nowrap; border-left: 3px solid transparent; }
+  .ln:hover { background: rgba(255,255,255,.035); }
+  .ln.block { border-left-color: var(--red); }
+  .ln.allow { border-left-color: rgba(74,222,128,.3); }
+  .ln .t { color: var(--dimmer); }
+  .ln .h { color: #c3cad2; overflow: hidden; text-overflow: ellipsis; }
+  .ln .v { font-weight: 700; } .ln .v.BLOCK { color: var(--red); } .ln .v.ALLOW { color: var(--green); }
+  .ln .p, .ln .ms { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
+  .ln .tier { color: var(--blue); }
+  .ln .lbl { color: var(--dim); }
+  .empty { padding: 22px 16px; color: var(--dimmer); }
+
+  .pad { padding: 14px 16px; }
+  .row { display: flex; align-items: center; gap: 11px; }
+  select { font: inherit; font-size: 12.5px; background: rgba(255,255,255,.06); color: var(--fg);
+           border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; }
+  input[type=range] { flex: 1; accent-color: var(--blue); }
+  .tau { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 42px; text-align: right; font-size: 15px; }
+
+  dl.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 13px 0 0; }
+  .stat { background: rgba(255,255,255,.04); border: 1px solid var(--line);
+          border-radius: 10px; padding: 10px 12px; }
+  .stat dt { font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--dimmer); }
+  .stat dd { margin: 4px 0 0; font-size: 22px; font-weight: 680; font-variant-numeric: tabular-nums;
+             letter-spacing: -.02em; }
+  .stat dd.fpr { color: var(--green); } .stat dd.rec { color: var(--blue); }
+  .note { margin-top: 10px; font-size: 11px; color: var(--dimmer); font-style: italic; }
+
+  .g { margin-bottom: 13px; }
+  .g:last-child { margin-bottom: 0; }
+  .gl { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); }
+  .gl b { color: var(--fg); font-variant-numeric: tabular-nums; font-weight: 650; }
+  .track { margin-top: 7px; height: 7px; border-radius: 4px; background: rgba(255,255,255,.07); overflow: hidden; }
+  .fill { height: 100%; border-radius: 4px; transition: width .5s ease; width: 0; }
+  .fill.text { background: linear-gradient(90deg, var(--blue), #8ab4f8); }
+  .fill.vision { background: linear-gradient(90deg, var(--purple), #e879f9); }
+  .shared { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line);
+            font-size: 11.5px; color: var(--dim); line-height: 1.55; }
+  .shared b { color: var(--fg); }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">Airlock <span>· live decision log</span></div>
+    <div class="health"><span class="led" id="led"></span><span id="healthTxt">connecting…</span></div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Decisions <span class="n" id="counts">0 total</span></h2>
+      <div id="feed"><div class="empty">Waiting for the first decision…</div></div>
+    </section>
+
+    <div class="side">
+      <section class="card">
+        <h2>Operating point</h2>
+        <div class="pad">
+          <div class="row">
+            <select id="mode">
+              <option value="audit">Audit — log only (τ 0.30)</option>
+              <option value="balanced" selected>Balanced (τ 0.55)</option>
+              <option value="strict">Strict (τ 0.20)</option>
+            </select>
+          </div>
+          <div class="row" style="margin-top:11px">
+            <input type="range" id="tau" min="0.20" max="0.75" step="0.01" value="0.55">
+            <span class="tau" id="tauV">0.55</span>
+          </div>
+          <dl class="stats">
+            <div class="stat"><dt>FPR @ τ</dt><dd class="fpr" id="fpr">—</dd></div>
+            <div class="stat"><dt>Recall @ τ</dt><dd class="rec" id="rec">—</dd></div>
+            <div class="stat"><dt>Benign n</dt><dd id="nBenign">—</dd></div>
+          </dl>
+          <div class="note" id="scoreNote">scores cached; threshold sweep is exact — no inference is re-run</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Unified memory · one 128 GB pool</h2>
+        <div class="pad">
+          <div class="g">
+            <div class="gl"><span>KV cache · airlock-text 35B :8000</span><b id="kvT">—</b></div>
+            <div class="track"><div class="fill text" id="kvTf"></div></div>
+          </div>
+          <div class="g">
+            <div class="gl"><span>KV cache · airlock-vision 7B :8001</span><b id="kvV">—</b></div>
+            <div class="track"><div class="fill vision" id="kvVf"></div></div>
+          </div>
+          <div class="shared">
+            Two vLLM processes, one physical memory pool — no VRAM partition to show,
+            because there isn't one. Escalation to an LLM: <b id="esc">—</b> of pastes.
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+const BASE = 'http://127.0.0.1:8787';
+const WS   = 'ws://127.0.0.1:8787/v1/stream';
+const MODES = { audit: 0.30, balanced: 0.55, strict: 0.20 };
+
+const $ = (id) => document.getElementById(id);
+const feed = $('feed');
+let total = 0, blocked = 0;
+
+const hhmmss = (ts) => new Date(ts || Date.now()).toTimeString().slice(0, 8);
+
+function addRow(d, prepend) {
+  if (!d || d.type !== 'decision') return;
+  const empty = feed.querySelector('.empty');
+  if (empty) empty.remove();
+  const isBlock = d.action === 'block';
+  const el = document.createElement('div');
+  el.className = 'ln ' + (isBlock ? 'block' : 'allow');
+  const size = d.modality === 'image' ? 'image' : (d.chars + 'ch');
+  el.innerHTML =
+    `<span class="t">${hhmmss(d.ts)}</span>` +
+    `<span class="h">${d.host || '—'}</span>` +
+    `<span class="lbl">${d.modality || 'text'} ${size}</span>` +
+    `<span class="v ${isBlock ? 'BLOCK' : 'ALLOW'}">${isBlock ? 'BLOCK' : 'ALLOW'}</span>` +
+    `<span class="lbl">${d.label || ''}</span>` +
+    `<span class="tier">${d.tier || '—'}</span>` +
+    `<span class="ms">${d.latency_ms != null ? d.latency_ms + 'ms' : '—'}</span>`;
+  feed.prepend(el);
+  while (feed.childElementCount > 1000) feed.lastElementChild.remove();
+  total += 1; if (isBlock) blocked += 1;
+  $('counts').textContent = `${total} total · ${blocked} blocked`;
+}
+
+// ------------------------------------------------------------------ cached sweep
+let SCORES = null;
+function sweep(tau) {
+  $('tauV').textContent = tau.toFixed(2);
+  if (!SCORES) return;
+  const b = SCORES.benign || [], s = SCORES.sensitive || [];
+  const fp = b.filter((p) => p >= tau).length;
+  const tp = s.filter((p) => p >= tau).length;
+  $('fpr').textContent = b.length ? (fp / b.length * 100).toFixed(2) + '%' : '—';
+  $('fpr').title = `${fp} / ${b.length} benign items at or above τ`;
+  $('rec').textContent = s.length ? (tp / s.length * 100).toFixed(1) + '%' : '—';
+  $('nBenign').textContent = b.length || '—';
+}
+$('tau').addEventListener('input', (e) => sweep(Number(e.target.value)));
+$('mode').addEventListener('change', (e) => {
+  const t = MODES[e.target.value]; $('tau').value = String(t); sweep(t);
+});
+
+fetch('./scores_benign.json').then((r) => r.json()).then((j) => {
+  SCORES = j;
+  if (j._placeholder) {
+    $('scoreNote').textContent =
+      'PLACEHOLDER SCORES — shape only. Replace with results/scores_benign.json before showing a number.';
+    $('scoreNote').style.color = '#fcd34d';
+  }
+  sweep(Number($('tau').value));
+}).catch(() => { $('scoreNote').textContent = 'No cached scores file found next to this page.'; });
+
+// ---------------------------------------------------------------------- health
+async function health() {
+  try {
+    const h = await (await fetch(BASE + '/healthz', { cache: 'no-store' })).json();
+    const allUp = h.ok && h.clf && h.vlm && h.mongo;
+    $('led').className = 'led ' + (h.ok ? (allUp ? 'up' : 'amber') : 'down');
+    $('healthTxt').textContent =
+      `clf ${h.clf ? '✓' : '✗'} · vlm ${h.vlm ? '✓' : '✗'} · mongo ${h.mongo ? '✓' : '✗'} · up ${h.uptime_s || 0}s`
+      + (h.stub ? ' · STUB' : '');
+  } catch (_) {
+    $('led').className = 'led down';
+    $('healthTxt').textContent = 'inspector unreachable — every paste fails closed to BLOCK';
+  }
+}
+health(); setInterval(health, 5000);
+
+// ------------------------------------------------------- backfill, then tail
+fetch(BASE + '/v1/decisions?limit=50', { cache: 'no-store' })
+  .then((r) => r.json())
+  .then((j) => (j.decisions || []).slice().reverse().forEach(addRow))
+  .catch(() => {});
+
+let backoff = 250, sock = null;
+function connect() {
+  try { sock = new WebSocket(WS); } catch (_) { return schedule(); }
+  sock.onopen = () => { backoff = 250; };
+  sock.onmessage = (ev) => {
+    let f; try { f = JSON.parse(ev.data); } catch (_) { return; }
+    if (f.type === 'decision') addRow(f);
+    else if (f.type === 'metric') {
+      const kv = f.kv || {};
+      if (typeof kv.kv_cache_text === 'number') {
+        $('kvT').textContent = (kv.kv_cache_text * 100).toFixed(1) + '%';
+        $('kvTf').style.width = Math.min(100, kv.kv_cache_text * 100) + '%';
+      }
+      if (typeof kv.kv_cache_vision === 'number') {
+        $('kvV').textContent = (kv.kv_cache_vision * 100).toFixed(1) + '%';
+        $('kvVf').style.width = Math.min(100, kv.kv_cache_vision * 100) + '%';
+      }
+      if (typeof kv.escalation_rate === 'number') {
+        $('esc').textContent = (kv.escalation_rate * 100).toFixed(0) + '%';
+      }
+    }
+  };
+  sock.onclose = schedule;
+  sock.onerror = () => { try { sock.close(); } catch (_) {} };
+}
+function schedule() {
+  setTimeout(connect, backoff);
+  backoff = Math.min(backoff * 2, 4000);   // 250 ms -> 4 s, per CONTRACT.md
+}
+connect();
+</script>
+</body>
+</html>

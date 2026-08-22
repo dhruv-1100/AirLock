@@ -33,14 +33,29 @@ MAX_INFLIGHT = 32
 TOTAL_BUDGET_S = 2.3
 
 # C owns mongo.py; the cache degrades to in-process when it is absent so A is
-# never blocked on C (Phase-0 parallelism rule).
+# never blocked on C (Phase-0 parallelism rule). mongo.py itself no-ops every
+# call when MONGO_ENABLED=false or the server is unreachable.
 try:
-    from . import mongo  # noqa: F401
+    from . import mongo
     _HAVE_MONGO = True
 except ImportError:
     _HAVE_MONGO = False
 
 app = FastAPI(title="airlock inspect-svc")
+
+# C's console surface: GET /v1/decisions, GET /v1/policy, ws /v1/stream
+# (INTEGRATION.md §1 — B's console is dead without this).
+try:
+    from .console_api import router as console_router
+    app.include_router(console_router)
+except ImportError:
+    pass
+
+
+@app.on_event("startup")
+async def _connect_mongo():
+    if _HAVE_MONGO:
+        await mongo.connect()
 _started = time.monotonic()
 _inflight = asyncio.Semaphore(MAX_INFLIGHT)
 _cache: dict[str, dict] = {}  # payload_sha256 → verdict body (instant re-block)
@@ -150,9 +165,23 @@ def _respond(rid, *, action, label, severity, reason, spans, verified, p_block,
     return body
 
 
+async def _finish(body, key, *, origin="", text="", n_images=0, cache=False):
+    """Persist the decision (INTEGRATION.md §2: payload_text on blocks so
+    write_back_corpus can embed the real paste on beat 4), then respond.
+    write_decision never raises and returns a fake id in no-op mode."""
+    if _HAVE_MONGO:
+        body["decision_id"] = await mongo.write_decision(
+            body, key, origin=origin, chars=len(text), images=n_images,
+            payload_text=text if body["action"] in ("block", "warn") else None)
+    if cache and body["action"] == "block":
+        _cache[key] = body
+    return JSONResponse(body)
+
+
 async def _route(req, rid):
     t_start = time.monotonic()
     text = req.get("text") or ""
+    origin = req.get("origin") or ""
     images = req.get("images") or []
     modality = "image" if images else "text"
     mode = req.get("mode") or DEFAULT_MODE
@@ -162,14 +191,37 @@ async def _route(req, rid):
     def block_action():
         return "warn" if audit_only else "block"
 
-    # ---- CACHE — sha256 replay, ~1 ms -------------------------------------
+    # ---- CACHE — sha256 replay, ~1 ms: in-process first, then Mongo -------
     key = hashlib.sha256(
         (text + "".join(im.get("b64", "") for im in images)).encode()).hexdigest()
-    if key in _cache:
-        hit = dict(_cache[key])
+    hit = _cache.get(key)
+    if hit:
+        hit = dict(hit)
         hit.update(request_id=rid, tier="CACHE",
                    latency_ms=int((time.monotonic() - t_start) * 1000))
         return JSONResponse(hit)
+    if _HAVE_MONGO:
+        # Mongo decisions doc → verdict body (fields differ; binaries dropped).
+        doc = await mongo.get_by_hash(key)
+        if doc:
+            blocked = doc.get("verdict") == "BLOCK"
+            clause_id = doc.get("clause_id", "NONE")
+            body = _respond(
+                rid,
+                action=("warn" if (blocked and audit_only) else
+                        "block" if blocked else "allow"),
+                label=doc.get("label", "BENIGN"),
+                severity="HIGH" if blocked else "NONE",
+                reason="Instant re-block: identical payload previously decided",
+                spans=doc.get("evidence_spans", []),
+                verified=bool(doc.get("span_verified")),
+                p_block=float(doc.get("p_block", 0.0)),
+                threshold=threshold, tier="CACHE", model="cache",
+                modality=modality, t_start=t_start,
+                score_details=doc.get("score_details"),
+                clause_id=clause_id)
+            return await _finish(body, key, origin=origin,
+                                 n_images=len(images))
 
     # ---- T3 — image path: cheap gate → VLM transcribe+classify → ground ---
     if images:
@@ -177,11 +229,12 @@ async def _route(req, rid):
         gate = gate_img.inspect_image(im["b64"])
         if gate.fast_pass:
             # One-sided: the gate may only fast-pass, never block.
-            return JSONResponse(_respond(
+            body = _respond(
                 rid, action="allow", label="BENIGN", severity="NONE",
                 reason="Pre-VLM gate: natural image, no text-like structure",
                 spans=[], verified=True, p_block=0.0, threshold=threshold,
-                tier="T3", model="gate_img", modality="image", t_start=t_start))
+                tier="T3", model="gate_img", modality="image", t_start=t_start)
+            return await _finish(body, key, origin=origin, n_images=1)
         verdict, model = await t3.classify_image(im["b64"],
                                                  im.get("mime", "image/jpeg"))
         verdict, ocr_text = t3.ground(verdict)
@@ -196,8 +249,8 @@ async def _route(req, rid):
                 spans=t1_ocr.evidence_spans, verified=True, p_block=1.0,
                 threshold=threshold, tier="T3", model="airlock-vision+t1",
                 modality="image", t_start=t_start)
-            _cache[key] = body
-            return JSONResponse(body)
+            return await _finish(body, key, origin=origin, text=ocr_text,
+                                 n_images=1, cache=True)
         label = verdict["label"]
         p_block = (float(verdict.get("confidence", 0.5))
                    if label != "BENIGN" else 0.0)
@@ -218,17 +271,17 @@ async def _route(req, rid):
             model=f"airlock-vision/{model}", modality="image",
             t_start=t_start,
             clause_id=verdict.get("policy_clause_id") if blocked else "NONE")
-        if blocked:
-            _cache[key] = body
-        return JSONResponse(body)
+        return await _finish(body, key, origin=origin, text=ocr_text,
+                             n_images=1, cache=True)
 
     # ---- T0 — trivial gate ------------------------------------------------
     if modality == "text" and t0.is_trivial(text):
-        return JSONResponse(_respond(
+        body = _respond(
             rid, action="allow", label="BENIGN", severity="NONE",
             reason="Trivial payload", spans=[], verified=True, p_block=0.0,
             threshold=threshold, tier="T0", model="none", modality=modality,
-            t_start=t_start))
+            t_start=t_start)
+        return await _finish(body, key, origin=origin, text=text)
 
     # ---- T1 — deterministic scan ------------------------------------------
     scan = t1.scan(text)
@@ -239,8 +292,7 @@ async def _route(req, rid):
             spans=scan.evidence_spans, verified=True, p_block=1.0,
             threshold=threshold, tier="T1" if modality == "text" else "T3",
             model="none", modality=modality, t_start=t_start)
-        _cache[key] = body
-        return JSONResponse(body)
+        return await _finish(body, key, origin=origin, text=text, cache=True)
 
     # ---- T2 — LLM classifier, guided JSON, span-verified ------------------
     verdict, logprobs, model = await t2.classify(text, hints=scan.hints or None)
@@ -261,9 +313,7 @@ async def _route(req, rid):
         tier="T2" if modality == "text" else "T3",
         model=f"airlock-clf/{model}", modality=modality, t_start=t_start,
         clause_id=verdict.get("policy_clause_id") if blocked else "NONE")
-    if blocked:
-        _cache[key] = body
-    return JSONResponse(body)
+    return await _finish(body, key, origin=origin, text=text, cache=True)
 
 
 TEXT_BASE_URL = os.environ.get("AIRLOCK_TEXT_URL", "http://127.0.0.1:8000/v1")

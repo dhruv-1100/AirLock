@@ -8,7 +8,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from services.inspect.tiers import gate_img, t3
-from bench.run_fpr import wilson_ci
+from bench.report import wilson as wilson_ci
 
 
 def _b64(img):
