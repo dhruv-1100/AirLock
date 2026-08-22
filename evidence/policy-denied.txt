@@ -1,0 +1,8 @@
+--- api.openai.com ---
+{"detail":"GET api.openai.com:80/v1/models not permitted by policy","error":"policy_denied"}
+--- api.anthropic.com ---
+{"detail":"GET api.anthropic.com:80/v1/models not permitted by policy","error":"policy_denied"}
+--- generativelanguage.googleapis.com ---
+{"detail":"GET generativelanguage.googleapis.com:80/v1/models not permitted by policy","error":"policy_denied"}
+--- integrate.api.nvidia.com ---
+{"detail":"GET integrate.api.nvidia.com:80/v1/models not permitted by policy","error":"policy_denied"}

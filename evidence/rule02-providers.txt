@@ -1,0 +1,70 @@
+Rule 02 — "no remote LLM/API calls in the agent runtime path"
+Machine-checkable evidence, captured 2026-08-22T21:36:40Z on airlock-box.
+
+Sandbox: airlock            Gateway: nemoclaw (openshell 0.0.44)
+Source:  evidence/openshell-ocsf.2026-08-22.log
+
+--------------------------------------------------------------------
+1. EVERY inference request, and where it was routed
+--------------------------------------------------------------------
+  $ grep -oE 'endpoint=[^ ]+' evidence/openshell-ocsf.*.log | sort | uniq -c
+
+            4 endpoint=http://172.17.0.1:8000/v1
+
+  ONE endpoint. It is 172.17.0.1:8000 — the docker-bridge address of the vLLM
+  serving Nemotron-3.5-Lightning-30B-A3B-NVFP4 from local weights on this box.
+  Zero cloud providers. Zero other endpoints.
+
+--------------------------------------------------------------------
+2. EVERY network decision the sandbox made
+--------------------------------------------------------------------
+            4 ALLOWED inference.local:443
+
+  The only host the agent runtime opened is inference.local — the gateway's
+  Privacy Router, which TLS-terminates and forwards to the local endpoint above.
+
+--------------------------------------------------------------------
+3. The four cloud LLM hosts are DENIED at the proxy
+--------------------------------------------------------------------
+  $ openshell sandbox exec -n airlock -- curl -x $HTTPS_PROXY http://<host>/v1/models
+
+      api.openai.com                     403 {"error":"policy_denied"}
+      api.anthropic.com                  403 {"error":"policy_denied"}
+      generativelanguage.googleapis.com  403 {"error":"policy_denied"}
+      integrate.api.nvidia.com           403 {"error":"policy_denied"}
+
+  Deny-by-default: no allow rule names any of them, so there is nothing to match.
+  Enforced at the proxy, OUTSIDE the sandbox. network_policies are gateway state;
+  code running inside the sandbox cannot rewrite them.
+  Full bodies: evidence/policy-denied.json
+
+--------------------------------------------------------------------
+4. The sandbox cannot repoint inference even if it wants to
+--------------------------------------------------------------------
+  The route is gateway-scoped and set from the host CLI:
+
+      Gateway inference:
+      
+        Provider: gb10-vllm
+        Model: airlock-text
+        Version: 2
+        Timeout: 300s
+
+  Demonstrated: a request from inside the sandbox asking for model
+  "ignored-by-router" came back as "model":"airlock-text". The Privacy Router
+  discards the sandbox's model and api_key fields before anything leaves.
+
+--------------------------------------------------------------------
+HONEST LIMIT — read this out rather than letting a judge find it
+--------------------------------------------------------------------
+Layers 1-4 govern the SANDBOX. The host-side classifier calls vLLM on loopback
+and is outside OpenShell's enforcement scope entirely; no policy engine
+constrains a host process. The claim there is architectural, not enforced: the
+inspect service binds 127.0.0.1 only, links no cloud SDK, and reports
+bytes_egressed: 0 on every verdict. The ethernet unplug is the host-side proof.
+Do not blur the two.
+
+One deviation from SRS S2.5 worth stating: the provider base URL is the docker
+bridge IP 172.17.0.1:8000 rather than host.openshell.internal, because that name
+does not resolve where the CLI runs its verification. Same host, same listener,
+still off the LAN.

@@ -40,7 +40,20 @@ because the failure mode is a confusing "unknown sandbox" rather than "run onboa
 `nemoclaw <name> exec -- …`, `<name> logs --follow`, `<name> skill install <path>`,
 `<name> snapshot …` are all correct as written, once the sandbox exists.
 
-## 3. `openshell settings` syntax is wrong
+## 3. `openshell settings` syntax is HALF wrong — corrected after running it
+
+**Correction to an earlier version of this file, which said both `get` and `set` reject
+`--key`. Only `get` does.**
+
+- `settings set` **does** take `--key`/`--value` — and, at global scope, also needs
+  `--yes` in non-interactive mode:
+  `openshell settings set --global --yes --key ocsf_json_enabled --value true` ✓
+- `settings get` does **not**: the surface is `openshell settings get [--global] [--json] [NAME]`.
+  There is no `--key` and no `--show-scope`.
+
+Original note follows.
+
+## 3b. `openshell settings get` syntax is wrong
 
 ```
 $ openshell settings set --global --key policy_advisor_enabled --value true
@@ -74,6 +87,25 @@ aggregation through `pymongo`, which is already a dependency.
 - Existing sandbox `my-qwen-claw` has presets `brew, huggingface, local-inference, npm,
   openclaw-pricing` enabled; **`github` is disabled**, which is what the egress story
   wants (`evidence/nemoclaw-policy-list.txt`).
+
+## UPDATE — the stack is now up. What actually worked
+
+Everything below was run and verified; see `evidence/`.
+
+| step | working command |
+|---|---|
+| start the gateway | `nemoclaw onboard` gets as far as `[2/8] Starting OpenShell gateway` and leaves it healthy, then fails at `[3/8]` demanding `NVIDIA_API_KEY`. **Do not supply one** — that provider is NVIDIA's cloud endpoint, which is the exact thing Rule 02 forbids. Kill onboard there and configure the local provider by hand. |
+| local provider | `openshell provider create --name gb10-vllm --type openai --credential OPENAI_API_KEY=unused --config OPENAI_BASE_URL=http://172.17.0.1:8000/v1` |
+| inference route | `openshell inference set --provider gb10-vllm --model airlock-text --timeout 300` |
+| create the sandbox | `openshell sandbox create --name airlock --cpu 2 --memory 4Gi --no-tty --no-keep` — memory must be `4Gi`, not `4g`; takes ~2 min |
+| exec in it | `openshell sandbox exec -n airlock -- <cmd>` — `-n`, and it is `sandbox exec`, not `nemoclaw airlock exec` |
+| OCSF on | `openshell settings set --global --yes --key ocsf_json_enabled --value true` |
+| read OCSF | `openshell logs airlock -n 2000 --level debug` — note `-n` here is LINE COUNT, not the sandbox name; the name is positional |
+
+**`host.openshell.internal` does not resolve where the CLI runs its verification**, so
+`inference set` fails against it. Use the docker bridge IP. And vLLM published on
+loopback only is unreachable from the gateway container at all — `launch_text.sh` now
+takes `AIRLOCK_BRIDGE_IP` and publishes on `172.17.0.1` as well.
 
 ## What B did NOT run, and why
 

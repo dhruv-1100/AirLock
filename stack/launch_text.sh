@@ -48,6 +48,12 @@ IMAGE="${AIRLOCK_TEXT_IMAGE:-vllm/vllm-openai:latest}"
 # marlin for the unquantized ones and the engine dies. Leaving AIRLOCK_MOE_BACKEND unset
 # lets vLLM choose per layer, which still satisfies NFR-S5's intent — marlin on the NVFP4
 # MoE — without forcing it where it cannot apply. Set it to override.
+# The OpenShell gateway's Privacy Router runs in a container and resolves the host as
+# host.openshell.internal -> the docker bridge. A loopback-only publish is unreachable
+# from there, so `openshell inference set` fails verification and the sandbox has no
+# local model to route to. Publishing on the bridge as well keeps the listener off the
+# LAN — it is reachable only from containers on this box — while making the local-first
+# inference path actually work. Unset AIRLOCK_BRIDGE_IP to go back to loopback only.
 ENTRY=(${AIRLOCK_VLLM_ENTRY:-})
 EXTRA=(${AIRLOCK_VLLM_EXTRA:-})
 
@@ -56,6 +62,7 @@ bash "$(dirname "$0")/preflight.sh"
 
 docker run -d --name airlock-text --gpus all \
   -p 127.0.0.1:8000:8000 \
+  ${AIRLOCK_BRIDGE_IP:+-p $AIRLOCK_BRIDGE_IP:8000:8000} \
   -v "${AIRLOCK_MODELS_DIR:-/mnt/data/models}:/models:ro" \
   -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
   ${AIRLOCK_FLASHINFER_MOE_FP4:+-e VLLM_USE_FLASHINFER_MOE_FP4=$AIRLOCK_FLASHINFER_MOE_FP4} \
