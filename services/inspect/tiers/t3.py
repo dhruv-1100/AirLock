@@ -19,6 +19,15 @@ from . import t1
 VLM_BASE_URL = os.environ.get("AIRLOCK_VLM_URL", "http://127.0.0.1:8001/v1")
 # Request model NAME (--served-model-name), never a weights path.
 VLM_MODEL = os.environ.get("AIRLOCK_VLM_MODEL", "airlock-vision")
+
+# The Nemotron chat template defaults enable_thinking=True, so the model emits a
+# "Here's a thinking process:" preamble before any JSON. Measured on this box: 200
+# tokens consumed entirely by reasoning, finish_reason="length", NO JSON produced, and
+# 3.16 s per call against a 1.2 s budget — every T2 call 504s and the FPR comes back
+# near-total. With it off: 8 tokens, clean JSON, 236 ms. Set AIRLOCK_ENABLE_THINKING=1
+# to restore reasoning.
+_THINKING = os.getenv("AIRLOCK_ENABLE_THINKING", "0") not in ("0", "false", "no")
+_CHAT_TEMPLATE_KWARGS = {"enable_thinking": _THINKING}
 T3_TIMEOUT_S = 2.0  # server internal budget for the T3 call (SRS §5.1)
 
 # Text schema minus GOV_ID / PAYMENT_CARD (SRS §5.4).
@@ -92,6 +101,7 @@ async def classify_image(image_b64: str, mime: str,
         {"guided_json": VISION_SCHEMA},
     ]
     base = {
+        "chat_template_kwargs": _CHAT_TEMPLATE_KWARGS,
         "model": VLM_MODEL,
         "messages": [{"role": "user", "content": [
             {"type": "text", "text": VISION_PROMPT},

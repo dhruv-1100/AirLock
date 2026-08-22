@@ -24,7 +24,25 @@ from ..schemas import CLASSIFIER_SCHEMA
 CLF_BASE_URL = os.environ.get("AIRLOCK_CLF_URL", "http://127.0.0.1:8000/v1")
 # Request model NAME (--served-model-name), never a weights path.
 CLF_MODEL = os.environ.get("AIRLOCK_CLF_MODEL", "airlock-text")
-T2_TIMEOUT_S = 1.2  # server internal budget for the T2 call (SRS §5.1)
+# SRS §5.1 budgets the T2 call at 1.2 s, sized against Qwen3-4B on a dedicated :8002.
+# The committed two-server config runs T2 on the 30B at :8000, and measured on this box
+# it is a stable ~1.70 s (1692/1714/1720/1726 ms over four calls, prefix caching on, so
+# this is decode cost for the schema's rationale + up to three evidence spans, not
+# prefill). At 1.2 s every escalated paste 504s and the FPR run returns a wall of errors.
+#
+# 2.0 s leaves headroom over the measurement while staying inside both the 2.3 s server
+# total and B's 2500 ms client AbortController, so a real browser paste still renders a
+# verdict rather than a fail-closed BLOCK. Override with AIRLOCK_T2_TIMEOUT_S.
+T2_TIMEOUT_S = float(os.getenv("AIRLOCK_T2_TIMEOUT_S", "2.0"))
+
+# The Nemotron chat template defaults enable_thinking=True, so the model emits a
+# "Here's a thinking process:" preamble before any JSON. Measured on this box: 200
+# tokens consumed entirely by reasoning, finish_reason="length", NO JSON produced, and
+# 3.16 s per call against a 1.2 s budget — every T2 call 504s and the FPR comes back
+# near-total. With it off: 8 tokens, clean JSON, 236 ms. Set AIRLOCK_ENABLE_THINKING=1
+# to restore reasoning.
+_THINKING = os.getenv("AIRLOCK_ENABLE_THINKING", "0") not in ("0", "false", "no")
+_CHAT_TEMPLATE_KWARGS = {"enable_thinking": _THINKING}
 
 SYSTEM_PROMPT = """You are AIRLOCK, a local data-egress inspector. You classify a payload that an
 employee is about to paste into an external AI service.
@@ -158,6 +176,7 @@ async def classify(payload: str, hints=None, client: httpx.AsyncClient = None):
     """
     global _working_spelling
     base = {
+        "chat_template_kwargs": _CHAT_TEMPLATE_KWARGS,
         "model": CLF_MODEL,
         "messages": _messages(payload, hints),
         "temperature": 0.0,
