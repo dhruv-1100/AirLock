@@ -238,6 +238,90 @@ demo-shaped numbers, not measurements, and nothing may quote them.**
 
 ---
 
+# Round 5 — the pre-staged weights in `gb10/`
+
+70 GB landed on the box. `gb10/` is in `.gitignore` — those are inputs to the run, not
+artifacts of it, and one safetensors shard exceeds GitHub's hard file limit.
+
+Mapping, in `stack/models.env` (source it; it sets only variables A's launch scripts and
+tier modules already read — no launch flag, no tier logic, no GPU process touched):
+
+| on disk | what it is | role |
+|---|---|---|
+| `models/lightning` 21 G | Nemotron-3.5-Lightning-30B-A3B-**NVFP4**, `NemotronHForCausalLM`, MoE | `airlock-text` :8000 — replaces Qwen3.6-35B-A3B-NVFP4 |
+| `models/omni` 21 G | Nemotron-3-Nano-Omni-30B-A3B-Reasoning, **BF16**, multimodal | `airlock-vision` :8001 — replaces Holo1.5-7B |
+| `models/embed` 997 M | Nemotron-3-Embed-1B, NVFP4, **2048-d** | **not wired in** — see §12 |
+| `models/parakeet` 2.4 G | `ParakeetForTDT`, speech-to-text | no role — nothing in the SRS ingests audio |
+
+## 10. One env var is doing two incompatible jobs — A's call
+
+`AIRLOCK_TEXT_MODEL` is read by `launch_text.sh` as the **weights path** and by
+`app.py:371` as the **request model name**. They cannot both be right: the launch script
+passes `--served-model-name airlock-text`, and vLLM answers only to the served name.
+Verified against the live `:8000` on the box:
+
+```
+{"model":"/models/lightning"}
+  -> 404 {"message":"The model `/models/lightning` does not exist.",
+          "type":"NotFoundError"}
+```
+
+So setting `AIRLOCK_TEXT_MODEL` to the path — which `launch_text.sh` demands, with a
+`:?` that refuses to start without it — breaks `/v1/answer` with a 404 that reads exactly
+like the model server being down. Same collision on `AIRLOCK_VLM_MODEL` and
+`AIRLOCK_CLF_MODEL`.
+
+`models.env` works around it by splitting the two into separate blocks
+(`AIRLOCK_*_MODEL_PATH` for the launch shell, `AIRLOCK_*_MODEL` for the service shell).
+**The real fix is one line in each of A's three launch scripts** — read
+`AIRLOCK_TEXT_MODEL_PATH` rather than `AIRLOCK_TEXT_MODEL`. Flagged, not patched:
+`stack/launch_*.sh` and `app.py` are A's files.
+
+## 11. The memory budget no longer matches the weights — A's call
+
+SRS §7.3 sized the pool against Qwen3.6-35B-A3B-NVFP4 at 0.40 and **Holo1.5-7B** at 0.24.
+The vision model is now a **30B BF16** multimodal, not a 7B. 21 GB of weights on disk
+against a 0.24 ≈ 31 GB budget leaves very little for KV, multimodal caches and graphs,
+and NFR-S3 caps the summed utilisation at 0.85 with 0.64 committed.
+
+Not B's arithmetic to redo, and not something to discover at launch. **A should re-cut
+§7.3 against the actual weights before the first `launch_vision.sh`**, and the whiteboard
+total needs to reflect whatever comes out of that.
+
+Separately: the running `af-vllm` container currently answers `/v1/models` with `omni`
+and returns a 500 `EngineCore encountered an issue` on a chat completion. Presumably A
+mid-debug — noting it so it is not mistaken for a client problem.
+
+## 12. `models/embed` should stay unwired — C's call, but the reasons are hard
+
+Nemotron-3-Embed-1B is a better retrieval model than bge-small. It is still wrong here:
+
+1. **It is 2048-d.** `stack/seed.js:109` declares `numDimensions: 384` and
+   `services/inspect/embed.py:24` hard-codes `EMBED_DIM = 384`. Swapping means dropping
+   and rebuilding `airlock_vec` and re-embedding every exemplar — and a `$vectorSearch`
+   against a non-READY index returns **empty results, not an error**, which presents as a
+   dead detector. SRS §4 says a late index rebuild is not affordable.
+2. **It is an NVFP4 GPU model.** NFR-S10 prohibits a third GPU process for embeddings;
+   the architecture line is "Grace does retrieval, Blackwell does inference".
+
+If the team wants it, it is a seed-time change and has to land **before** `policy_corpus`
+is populated, not after.
+
+## 13. CFPB is recoverable — C's call
+
+`data/ATTRIBUTION.md` records CFPB as 0 of 120, method `unavailable`, which is why
+`benign_v1` is five sources rather than the six the SRS specifies.
+**`gb10/data/cfpb_narratives.csv` is on the box.** Pointing `bench/build_benign.py` at it
+restores the sixth source and the intended mix.
+
+## Fixed on B's side
+
+`tools/stub_inspect.py` reported `airlock-clf/qwen3-4b` and `airlock-vision/holo1.5-7b`.
+The block card renders `model` verbatim on the receipt, so the stub was naming weights we
+do not have. Now `nemotron-3.5-lightning-30b` and `nemotron-3-nano-omni-30b`.
+
+---
+
 ## Still open, owned elsewhere
 
 - `results/scores_benign.json` is the synthetic file from `bench/make_synthetic_scores.py`
