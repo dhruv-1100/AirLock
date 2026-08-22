@@ -28,7 +28,11 @@ VLM_MODEL = os.environ.get("AIRLOCK_VLM_MODEL", "airlock-vision")
 # to restore reasoning.
 _THINKING = os.getenv("AIRLOCK_ENABLE_THINKING", "0") not in ("0", "false", "no")
 _CHAT_TEMPLATE_KWARGS = {"enable_thinking": _THINKING}
-T3_TIMEOUT_S = 2.0  # server internal budget for the T3 call (SRS §5.1)
+# SRS §5.1 budgets the T3 call at 2.0 s, derived arithmetically against Holo1.5-7B —
+# and §7.1 flags that number as "the single largest unverified number in the project".
+# The vision model on this box is Nemotron-3-Nano-Omni-30B BF16, four times the size.
+# Override with AIRLOCK_T3_TIMEOUT_S; measured value recorded in results/t3_latency.md.
+T3_TIMEOUT_S = float(os.getenv("AIRLOCK_T3_TIMEOUT_S", "2.0"))
 
 # Text schema minus GOV_ID / PAYMENT_CARD (SRS §5.4).
 VISION_LABELS = ["BENIGN", "CREDENTIAL", "CUSTOMER_RECORD", "HEALTH_RECORD",
