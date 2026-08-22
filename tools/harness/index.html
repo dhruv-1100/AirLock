@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Airlock overlay harness</title>
+<!--
+  tools/harness/index.html — renders the overlay against fixtures with no Chrome
+  extension in the loop. Reloading an unpacked extension orphans every content script
+  in every open tab; during the build that costs more time than anything else B does.
+  This page loads extension/overlay.js and extension/console.js directly, stubs the
+  chrome.* surface and the __AIRLOCK_NET__ transport, and lets the card be styled at
+  the speed of a normal page refresh.
+
+  Serve the repo root:  python3 -m http.server 5175 --bind 127.0.0.1
+  Then open:            http://localhost:5175/tools/harness/
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; background: #0f1014; color: #e8eaed;
+         font: 14px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { padding: 40px; max-width: 760px; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  p { color: #8a939d; margin: 0 0 20px; font-size: 13px; }
+  button { font: inherit; font-size: 13px; padding: 9px 14px; margin: 0 8px 8px 0;
+           border-radius: 9px; border: 1px solid rgba(255,255,255,.14);
+           background: rgba(255,255,255,.06); color: #e8eaed; cursor: pointer; }
+  button:hover { background: rgba(255,255,255,.11); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Airlock overlay harness</h1>
+    <p>Renders the shadow-DOM overlay against <code>tools/fixtures/*.json</code>. No extension, no reload.</p>
+    <button data-fx="block">Block card (CUSTOMER_RECORD)</button>
+    <button data-fx="allow">Allow (chip only)</button>
+    <button data-fx="unavailable">Fail-closed (inspector unreachable)</button>
+    <button data-fx="scanning">Scanning chip</button>
+    <button data-fx="feed">Push 40 fake decisions</button>
+  </div>
+
+<script>
+  // --- stub the extension surfaces the overlay expects -------------------------
+  // window.chrome exists in a plain Chrome tab but has no .runtime — so this has to
+  // fill in the missing piece rather than replace the object.
+  window.chrome = window.chrome || {};
+  if (!window.chrome.runtime) {
+    window.chrome.runtime = { id: 'harness', getURL: (p) => '../../extension/' + p };
+  }
+  const subs = [];
+  window.__AIRLOCK_NET__ = {
+    health: async () => ({ ok: true, clf: true, vlm: true, mongo: true, uptime_s: 812 }),
+    decisions: async () => ({ decisions: [] }),
+    lockdown: async (on) => ({ on }),
+    lockdownState: async () => ({ on: false }),
+    feedback: async () => ({ ok: true, corpus_id: 'harness_abc123', embedded: true }),
+    onFrame: (fn) => subs.push(fn),
+    answer: (prompt, id, h) => {
+      const words = ('Yes — here is the shape of the answer without the customer data. ' +
+        'Group by plan, compute the 30-day activity delta and the MRR delta, then rank ' +
+        'the groups. Nothing left this machine.').split(' ');
+      let i = 0;
+      const t = setInterval(() => {
+        if (i >= words.length) { clearInterval(t); h.onDone && h.onDone(); return; }
+        h.onDelta && h.onDelta(words[i++] + ' ');
+      }, 35);
+    },
+  };
+  const PAYLOAD =
+    'name,email,phone,plan,mrr\n' +
+    'Ana Ruiz,ana.ruiz@northwind.example,+1-415-555-0142,Pro,4200\n' +
+    'Ben Ako,ben.ako@northwind.example,+1-415-555-0199,Team,900\n' +
+    'Chen Wu,chen.wu@northwind.example,+1-415-555-0117,Pro,4200';
+</script>
+<script src="../../extension/overlay.js"></script>
+<script src="../../extension/console.js"></script>
+<script>
+  const FX = {};
+  Promise.all(['block', 'allow'].map((n) =>
+    fetch('../fixtures/verdict_' + n + '.json').then((r) => r.json()).then((j) => (FX[n] = j))
+  )).then(() => console.log('fixtures loaded'));
+
+  const UNAVAILABLE = {
+    schema: 'airlock.error.v1', error: 'policy_denied', action: 'block',
+    label: 'airlock_unavailable', severity: 'HIGH',
+    reason: 'Inspector exceeded 2500 ms — deny by default',
+    request_id: 'r_harness', evidence_spans: [], evidence_verified: false,
+    p_block: 1, threshold: 0.55, tier: 'T0', model: 'none', modality: 'text',
+    latency_ms: 2500, bytes_egressed: 0, policy_clause_id: 'NONE',
+    policy_clause_text: '', decision_id: null, score_details: null,
+  };
+
+  const HOSTS = ['chatgpt.com', 'claude.ai', 'gemini.google.com', 'localhost:5173'];
+  document.addEventListener('click', (e) => {
+    const fx = e.target.dataset && e.target.dataset.fx;
+    if (!fx) return;
+    const ui = window.__AIRLOCK_UI__;
+    if (fx === 'scanning') return ui.scanning({ modality: 'text' });
+    if (fx === 'feed') {
+      let t = Date.now() - 40000;
+      for (let i = 0; i < 40; i++) {
+        const block = Math.random() < 0.18;
+        subs.forEach((fn) => fn({
+          type: 'decision', ts: (t += 1000), host: HOSTS[i % HOSTS.length],
+          modality: Math.random() < 0.15 ? 'image' : 'text',
+          chars: 80 + ((i * 37) % 900), action: block ? 'block' : 'allow',
+          label: block ? 'CUSTOMER_RECORD' : 'BENIGN',
+          p_block: block ? 0.7 + Math.random() * 0.3 : Math.random() * 0.1,
+          tier: block ? 'T2' : 'T1', latency_ms: block ? 180 + ((i * 13) % 300) : 3 + (i % 9),
+        }));
+      }
+      return;
+    }
+    ui.scanning({ modality: 'text' });
+    setTimeout(() => {
+      const v = fx === 'unavailable' ? UNAVAILABLE : FX[fx];
+      ui.verdict(v, { payloadText: PAYLOAD, host: 'chatgpt.com', origin: 'https://chatgpt.com' });
+    }, 320);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "schema": "airlock.verdict.v1",
+  "request_id": "r_fixture1",
+  "action": "block",
+  "label": "CUSTOMER_RECORD",
+  "severity": "HIGH",
+  "policy_clause_id": "POL-004",
+  "policy_clause_text": "Customer-identifying records must not leave managed endpoints.",
+  "reason": "12 rows of name,email,phone,plan,mrr",
+  "evidence_spans": ["ana.ruiz@northwind.example,+1-415-555-0142,Pro,4200"],
+  "evidence_verified": true,
+  "score": 0.94,
+  "p_block": 0.94,
+  "threshold": 0.55,
+  "tier": "T2",
+  "model": "airlock-clf/qwen3-4b",
+  "modality": "text",
+  "latency_ms": 312,
+  "bytes_egressed": 0,
+  "decision_id": "6712c0f1a3e94b2d8c5e1102",
+  "score_details": {
+    "value": 0.0306,
+    "description": "reciprocal rank fusion: sum over input pipelines of weight * 1/(rankConstant + rank), rankConstant = 60",
+    "details": [
+      { "inputPipelineName": "semantic", "rank": 1, "weight": 0.7, "value": 0.011475, "details": [] },
+      { "inputPipelineName": "lexical", "rank": 3, "weight": 0.3, "value": 0.004762, "details": [] }
+    ]
+  }
+}

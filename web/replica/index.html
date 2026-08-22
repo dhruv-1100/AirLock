@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistant</title>
+<!--
+  web/replica/index.html — beat 4's stage.
+
+  A deliberately plain replica of a chat composer, served on http://localhost:5173.
+  Two reasons it exists, both of them about risk rather than looks:
+
+    1. Loopback -> loopback. The page is http://localhost, the inspector is
+       http://127.0.0.1:8787, so Local Network Access is not involved at all. If
+       Chrome's LNA behaviour is different on the box than expected, this surface
+       still works.
+    2. No framework is fighting for the paste event. ProseMirror and Lexical rebuild
+       their nodes constantly; a contenteditable div does not.
+
+  It is also the ONLY surface the ethernet-unplug beat runs on. Never unplug while a
+  chatgpt.com tab is focused — one reload offline and the SPA is gone for good.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1014; --panel: #16181d; --line: rgba(255,255,255,.09);
+    --fg: #e8eaed; --dim: #8a939d; --accent: #6ea8fe;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  header {
+    width: 100%; border-bottom: 1px solid var(--line); padding: 13px 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  header .dot { width: 9px; height: 9px; border-radius: 50%; background: #4ade80; }
+  header .name { font-weight: 620; letter-spacing: -.01em; }
+  header .sub { color: var(--dim); font-size: 12.5px; margin-left: auto; }
+
+  main { width: min(780px, 100%); flex: 1; padding: 26px 20px 0; overflow-y: auto; }
+  .msg { display: flex; gap: 13px; margin-bottom: 22px; }
+  .who {
+    width: 27px; height: 27px; border-radius: 7px; flex: none;
+    display: grid; place-items: center; font-size: 11px; font-weight: 700;
+    background: rgba(255,255,255,.07);
+  }
+  .msg.me .who { background: rgba(110,168,254,.18); color: #cfe0ff; }
+  .txt { white-space: pre-wrap; word-break: break-word; padding-top: 3px; }
+  .txt.dim { color: var(--dim); }
+
+  footer { width: min(780px, 100%); padding: 14px 20px 24px; }
+  .composer {
+    display: flex; align-items: flex-end; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 11px 11px 11px 15px;
+    transition: border-color .15s ease;
+  }
+  .composer:focus-within { border-color: rgba(110,168,254,.45); }
+  #composer {
+    flex: 1; min-height: 26px; max-height: 220px; overflow-y: auto;
+    outline: none; line-height: 1.55;
+  }
+  #composer:empty::before {
+    content: attr(data-placeholder); color: var(--dim); pointer-events: none;
+  }
+  #send {
+    flex: none; width: 33px; height: 33px; border-radius: 9px; border: 0; cursor: pointer;
+    background: rgba(110,168,254,.9); color: #06070a; font-size: 16px; line-height: 1;
+    display: grid; place-items: center;
+  }
+  #send:disabled { background: rgba(255,255,255,.10); color: var(--dim); cursor: default; }
+  .foot { margin-top: 9px; text-align: center; color: var(--dim); font-size: 11.5px; }
+  .foot code { color: #a9b4bf; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="dot"></span>
+    <span class="name">Assistant</span>
+    <span class="sub">local replica · <code>localhost:5173</code> · no network calls</span>
+  </header>
+
+  <main id="thread">
+    <div class="msg">
+      <div class="who">A</div>
+      <div class="txt dim">This is a local replica of a chat composer. Paste something into the box below.
+Airlock inspects it on this machine before a single byte would leave.</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="composer">
+      <div id="composer" contenteditable="true" role="textbox" aria-multiline="true"
+           data-placeholder="Message the assistant…"></div>
+      <button id="send" disabled title="Send">↑</button>
+    </div>
+    <div class="foot">Nothing typed here is transmitted. The send button appends to the thread locally.</div>
+  </footer>
+
+<script>
+  const composer = document.getElementById('composer');
+  const send = document.getElementById('send');
+  const thread = document.getElementById('thread');
+
+  const sync = () => { send.disabled = composer.innerText.trim().length === 0; };
+  composer.addEventListener('input', sync);
+
+  function push(who, text, cls) {
+    const el = document.createElement('div');
+    el.className = 'msg' + (who === 'You' ? ' me' : '');
+    el.innerHTML = '<div class="who"></div><div class="txt"></div>';
+    el.querySelector('.who').textContent = who === 'You' ? 'Y' : 'A';
+    const t = el.querySelector('.txt');
+    t.textContent = text;
+    if (cls) t.classList.add(cls);
+    thread.appendChild(el);
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  function submit() {
+    const text = composer.innerText.trim();
+    if (!text) return;
+    push('You', text);
+    composer.textContent = '';
+    sync();
+    setTimeout(() => push('Assistant',
+      'Received locally. This replica does not call any model — the sanctioned answer ' +
+      'comes from the Airlock overlay, which streams from the 35B on this box.', 'dim'), 220);
+  }
+
+  send.addEventListener('click', submit);
+  composer.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+</script>
+</body>
+</html>
