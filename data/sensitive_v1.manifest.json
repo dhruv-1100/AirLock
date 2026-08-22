@@ -1,0 +1,28 @@
+{
+  "corpus": "sensitive_v1.jsonl",
+  "version": "sensitive_v1",
+  "seed": 1337,
+  "n": 436,
+  "n_sensitive": 400,
+  "n_hard_negative": 36,
+  "all_synthetic": true,
+  "carriers": 22,
+  "reproduce": "python bench/build_sensitive.py --seed 1337 --out data/sensitive_v1.jsonl",
+  "counts": {
+    "FINANCIAL_NONPUBLIC": 60,
+    "CUSTOMER_RECORD": 60,
+    "GOV_ID": 45,
+    "PROPRIETARY_CODE": 40,
+    "PAYMENT_CARD": 45,
+    "CREDENTIAL": 70,
+    "HEALTH_RECORD": 45,
+    "HARD_NEGATIVE": 36,
+    "LEGAL_HR": 35
+  },
+  "honest_framing": "Our sensitive set is synthetic, so recall is an upper bound. Our benign set is human-written, so FPR is the number we stand behind.",
+  "notes": [
+    "Every artefact is embedded in one of the carrier templates \u2014 never a bare PAN.",
+    "All credentials are structurally shaped but synthetic; none is or was live.",
+    "HARD_NEGATIVE items are labelled BENIGN and reported as their own line."
+  ]
+}

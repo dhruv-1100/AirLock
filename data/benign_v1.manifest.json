@@ -1,0 +1,68 @@
+{
+  "corpus": "benign_v1.jsonl",
+  "version": "benign_v1",
+  "seed": 1337,
+  "n": 1000,
+  "corpus_is_real": false,
+  "n_synthetic": 1000,
+  "reproduce": "python bench/build_benign.py --seed 1337 --out data/benign_v1.jsonl",
+  "min_chars": 200,
+  "max_chars": 4000,
+  "sources": [
+    {
+      "name": "WildChat-1M",
+      "requested": 400,
+      "got": 400,
+      "method": "synthetic",
+      "license": "ODC-BY",
+      "url": "https://huggingface.co/datasets/allenai/WildChat-1M",
+      "notes": "first user turn only; toxic==False; PII-redaction flag unset"
+    },
+    {
+      "name": "StackExchange",
+      "requested": 200,
+      "got": 200,
+      "method": "synthetic",
+      "license": "CC BY-SA 4.0",
+      "url": "https://archive.org/details/stackexchange",
+      "notes": "question bodies; post ids retained in ATTRIBUTION.md"
+    },
+    {
+      "name": "MBPP",
+      "requested": 100,
+      "got": 100,
+      "method": "synthetic",
+      "license": "CC-BY-4.0",
+      "url": "https://huggingface.co/datasets/google-research-datasets/mbpp",
+      "notes": ""
+    },
+    {
+      "name": "HumanEval",
+      "requested": 80,
+      "got": 80,
+      "method": "synthetic",
+      "license": "MIT",
+      "url": "https://huggingface.co/datasets/openai/openai_humaneval",
+      "notes": ""
+    },
+    {
+      "name": "CFPB",
+      "requested": 120,
+      "got": 120,
+      "method": "synthetic",
+      "license": "US Government / public domain",
+      "url": "https://www.consumerfinance.gov/data-research/consumer-complaints/",
+      "notes": "consumer complaint narratives; snapshot date recorded in the manifest"
+    },
+    {
+      "name": "Wikipedia",
+      "requested": 100,
+      "got": 100,
+      "method": "synthetic",
+      "license": "CC BY-SA 4.0",
+      "url": "https://dumps.wikimedia.org/",
+      "notes": "lead paragraphs, one per article"
+    }
+  ],
+  "WARNING": "THIS CORPUS CONTAINS SYNTHETIC PLACEHOLDER TEXT. It exists to wire the harness end to end. Do NOT report an FPR from it. bench/report.py will refuse to emit a headline number while corpus_is_real is false."
+}

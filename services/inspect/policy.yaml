@@ -1,0 +1,149 @@
+# services/inspect/policy.yaml — owner C. SRS §6.1.
+#
+# The nine policy clauses. This file is:
+#   1. the enum A's guided-JSON schema constrains `policy_clause_id` to,
+#   2. the text B's block overlay renders,
+#   3. the static fallback when MongoDB is down or the search index is not queryable
+#      (SRS §7.4 — clause retrieval degrades to this enum, NEVER to silent-allow),
+#   4. a submission attachment in its own right.
+#
+# Severity is ORTHOGONAL to class. It drives log / warn / block independently, so an
+# operator can retune posture without retraining or reclassifying anything.
+#
+# Clause text is written to be quotable on stage: a judge should be able to read the
+# clause the block cites and agree the block was correct.
+
+version: policy_v1
+tenant: acme
+updated: "2026-08-22"
+
+thresholds:
+  audit:    0.30    # log only, never block
+  balanced: 0.55    # default
+  strict:   0.20
+
+clauses:
+  - id: POL-001
+    class: CREDENTIAL
+    severity: HIGH
+    primary_tier: T1
+    text: >-
+      Live authentication material must never leave a managed endpoint. This includes API
+      keys, bearer and refresh tokens, private keys, passwords, and connection strings
+      carrying real credentials. Published vendor example keys and documented placeholder
+      values are explicitly out of scope.
+    block_without_model: true   # T1-HIGH: checksum- or prefix-gated, no LLM call
+
+  - id: POL-002
+    class: PAYMENT_CARD
+    severity: HIGH
+    primary_tier: T1
+    text: >-
+      Primary account numbers must not be transmitted to third-party services. A candidate
+      is treated as a live PAN only when it satisfies both an issuer-prefix match and the
+      Luhn check digit. The card-network published test numbers are excluded by list.
+    block_without_model: true
+
+  - id: POL-003
+    class: GOV_ID
+    severity: HIGH
+    primary_tier: T1
+    text: >-
+      Government-issued identifiers — social security and taxpayer numbers, passport
+      numbers, driving licences, and national identity numbers — must not be shared with
+      external processors. Detection requires both a structural match and a supporting
+      keyword within the surrounding context window.
+    block_without_model: false  # structure alone is not enough; context gates it
+
+  - id: POL-004
+    class: CUSTOMER_RECORD
+    severity: HIGH
+    primary_tier: T2
+    text: >-
+      Customer-identifying records must not leave managed endpoints. Three or more rows
+      of person-identifying tuples — any combination of name, email address, telephone
+      number, account tier, or contract value — constitute a customer record regardless
+      of the file format they are pasted from.
+    block_without_model: false
+
+  - id: POL-005
+    class: HEALTH_RECORD
+    severity: HIGH
+    primary_tier: T2
+    text: >-
+      Patient-identifiable clinical information must not be transmitted to services
+      outside the organisation's business-associate agreements. This covers diagnoses,
+      medications, procedures, and clinical notes when they appear alongside any
+      identifier that could re-identify the patient.
+    block_without_model: false
+
+  - id: POL-006
+    class: FINANCIAL_NONPUBLIC
+    severity: HIGH
+    primary_tier: T2
+    text: >-
+      Financial information the company has not yet released publicly must not be
+      disclosed to external services. This covers forecasts, projections, pipeline,
+      recurring-revenue figures, pre-announcement results, capitalisation tables, and
+      compensation data. Information already published in a filing, a press release, or
+      an earnings call is expressly permitted.
+    block_without_model: false
+
+  - id: POL-007
+    class: PROPRIETARY_CODE
+    severity: MEDIUM
+    primary_tier: T2
+    text: >-
+      Internal source code and infrastructure configuration must not be pasted into
+      external tools. Internal provenance is established by internal hostnames, internal
+      service names, or an explicit internal or confidential marking. Open-source,
+      tutorial, textbook, and documentation code is expressly permitted.
+    block_without_model: false
+
+  - id: POL-008
+    class: LEGAL_HR
+    severity: HIGH
+    primary_tier: T2
+    text: >-
+      Material under legal privilege or confidentiality obligation must not be shared
+      externally. This covers contracts under non-disclosure agreement, matters in
+      active or anticipated litigation, and disciplinary or human-resources proceedings
+      concerning identifiable individuals.
+    block_without_model: false
+
+  - id: POL-009
+    class: RESERVED
+    severity: LOW
+    primary_tier: null
+    text: >-
+      Reserved. Held deliberately unused so the classifier's constrained output enum can
+      absorb a ninth class without a schema change or an index rebuild mid-incident.
+    block_without_model: false
+
+  - id: NONE
+    class: BENIGN
+    severity: NONE
+    primary_tier: T0
+    text: >-
+      No restricted material identified. This is the default answer. Blocking a benign
+      paste costs an employee real time and erodes trust in the control, so the burden of
+      proof sits entirely on the block.
+    block_without_model: false
+
+# ---------------------------------------------------------------------------
+# Fail-open register — SRS §7.4.
+# Exactly two fail-open paths exist in the system. Both are logged, both are reported
+# as a rate in the submission. Nowhere else may fail open.
+# ---------------------------------------------------------------------------
+fail_open:
+  - id: unverified_evidence
+    applies_to: [T2, T3]
+    rule: >-
+      A non-BENIGN verdict whose evidence_spans cannot be found verbatim in the payload
+      (after a whitespace-normalised second pass) is forced to BENIGN. The model could
+      not point at anything real.
+  - id: no_grounded_marker
+    applies_to: [T3]
+    rule: >-
+      A non-BENIGN image verdict with no temporal marker, no confidentiality marker, and
+      no Tier-1 hit over the transcribed text is forced to BENIGN.

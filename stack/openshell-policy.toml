@@ -1,0 +1,146 @@
+# stack/openshell-policy.toml — owner C. SRS §10 Phase 1, §S1.3, §S2.
+#
+# Deny-by-default egress for the "airlock" sandbox. This is the load-bearing layer of
+# the whole submission: it is what converts "we don't call the cloud" from a claim into
+# a machine-checkable fact, enforced at the proxy, OUTSIDE the sandbox and unmodifiable
+# from within it.
+#
+# ===================== DECISION MADE AT 11:15, NOT REVISITED =====================
+# MongoDB gets ZERO of the five endpoints.
+#
+# The inspect service stays HOST-SIDE and only /v1/inspect is exposed to the sandbox.
+# Rationale: the clipboard hook must run on the host anyway (a sandbox cannot and should
+# not observe a paste event — that would mean giving it display-server access), so the
+# classifier is already host-side. Spending an allowlist entry on :27017 would widen the
+# sandbox's reach for zero demo value and would put a database wire protocol on the
+# authorised surface. C's call per Phase 1 task 1.
+# =================================================================================
+#
+# Hot-reload note (§S2.2): `network_policies` and `network_middlewares` are DYNAMIC and
+# reload with no restart. `filesystem_policy`, `landlock` and `process` are STATIC and
+# are locked at sandbox creation. Editing a static section here after creation does
+# nothing — rebuild instead of debugging.
+
+[meta]
+sandbox = "airlock"
+version = "1"
+description = "Airlock: deny-by-default egress. Local inference only. No cloud LLM host is reachable."
+
+# ---------------------------------------------------------------------------
+# THE ENTIRE ALLOWED EGRESS SURFACE. Five entries. Everything else 403s.
+# ---------------------------------------------------------------------------
+
+# 1 — managed inference route to the 35B on the host. Cannot be excluded, and we want it.
+#     `inference.local` is not a hostname allowance: it is a whitelist of request SHAPES.
+#     The Privacy Router strips sandbox-supplied credentials, injects the gateway's,
+#     rewrites the model, and denies non-inference requests. The sandbox's own `model`
+#     and `api_key` are discarded before anything leaves.
+[[network_policies.allow]]
+name = "managed_inference"
+host = "inference.local"
+port = 443
+protocol = "rest"
+enforcement = "enforce"
+rules = [{ method = "POST", path = "/v1/chat/completions" }]
+
+# 2 — our vision model. One verb, one path. Mirrors policy/airlock-egress.yaml.
+[[network_policies.allow]]
+name = "airlock_vlm"
+host = "host.openshell.internal"
+port = 8081
+protocol = "rest"
+enforcement = "enforce"
+rules = [{ method = "POST", path = "/v1/chat/completions" }]
+deny_rules = [{ method = "*", path = "/v1/models/**" }]
+
+# 3 — the inspect gateway. The ONLY Airlock surface the sandbox may call, and it is
+#     read-only from the sandbox's point of view: it submits a payload and receives a
+#     verdict. It cannot read the ledger and cannot change policy.
+[[network_policies.allow]]
+name = "airlock_inspect"
+host = "host.openshell.internal"
+port = 9100
+protocol = "rest"
+enforcement = "enforce"
+rules = [{ method = "POST", path = "/v1/inspect" }]
+deny_rules = [
+  { method = "*", path = "/v1/decisions**" },
+  { method = "*", path = "/v1/feedback**" },
+  { method = "*", path = "/v1/policy**" },
+]
+
+# 4 — ClawHub. BUILD-TIME ONLY. Excluded after skills are installed (policy/exclusions.md).
+[[network_policies.allow]]
+name = "clawhub"
+host = "clawhub.ai"
+port = 443
+protocol = "rest"
+enforcement = "enforce"
+build_time_only = true
+
+# 5 — npm. BUILD-TIME ONLY. Excluded after skills are installed. Order matters: exclude
+#     this AFTER `openclaw skills install`, or the install fails and you lose ten minutes.
+[[network_policies.allow]]
+name = "npm"
+host = "registry.npmjs.org"
+port = 443
+protocol = "rest"
+enforcement = "enforce"
+build_time_only = true
+
+# ---------------------------------------------------------------------------
+# EXPLICIT DENIES.
+#
+# Strictly redundant — deny-by-default already covers every one of these. They are
+# written out anyway because a denial that names its rule is better evidence than a
+# denial that says "no matching policy", and because a reviewer reading this file
+# should be able to see the intent without reconstructing it from an absence.
+#
+# `nemoclaw airlock exec -- curl -sS https://api.openai.com/v1/models` against this
+# produces evidence/policy-denied.json — demo beat 5.
+# ---------------------------------------------------------------------------
+[[network_policies.deny]]
+name = "cloud_llm_providers"
+hosts = [
+  "api.openai.com",
+  "api.anthropic.com",
+  "generativelanguage.googleapis.com",
+  "integrate.api.nvidia.com",
+  "api.groq.com",
+  "api.mistral.ai",
+  "openrouter.ai",
+  "api.deepseek.com",
+]
+reason = "Rule 02: no remote LLM or API calls in the agent runtime path."
+
+[[network_policies.deny]]
+name = "source_control"
+hosts = ["github.com", "raw.githubusercontent.com", "gist.github.com"]
+reason = "No code retrieval at runtime. Blocked from inside the sandbox by design."
+
+[[network_policies.deny]]
+name = "telemetry_and_exfil"
+hosts = ["*.segment.io", "*.amplitude.com", "*.sentry.io", "*.datadoghq.com"]
+reason = "A DLP product that ships content to a telemetry endpoint is worse than none."
+
+# ---------------------------------------------------------------------------
+# Audit. OCSF v1.8.0 JSONL is the authoritative record — the gateway buffer is in-memory
+# and does not survive. Every inference call emits a class_uid 6003 API Activity record
+# naming its provider URL, which is what makes Rule 02 machine-checkable:
+#
+#   jq -r 'select(.class_uid==6003) | .ai_model.ai_provider' \
+#     /var/log/openshell-ocsf.$(date +%F).log | sort | uniq -c \
+#     | tee evidence/rule02-providers.txt
+#
+# Expected: one provider, host.openshell.internal. Zero cloud LLM hosts.
+# This is the single strongest artifact in the submission.
+# ---------------------------------------------------------------------------
+[audit]
+ocsf_json_enabled = true
+ocsf_version = "1.8.0"
+log_path = "/var/log/openshell-ocsf.%Y-%m-%d.log"
+log_denials = true
+log_inference_provider = true
+
+[defaults]
+egress = "deny"

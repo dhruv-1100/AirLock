@@ -1,4 +1,23 @@
-.venv/
+# secrets — never commit
+.airlock_key
+.airlock_resume_token
+
+# generated corpora and results (regenerable with one seeded command)
+data/benign_v1.jsonl
+data/sensitive_v1.jsonl
+data/dumps/
+results/*.png
+results/*.log
+
+# python
 __pycache__/
-*.pyc
-results/
+*.py[cod]
+.venv/
+venv/
+
+# generated submission build
+submission/SUBMISSION.final.md
+results/fpr_report.json
+results/REPORT.md
+results/false_positives.md
+results/scores_*.json
