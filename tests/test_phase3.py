@@ -80,11 +80,21 @@ def test_t1_only_blocks_high_and_allows_escalations(client, monkeypatch):
 
 def test_t2_rows_skip_t1_block(client, monkeypatch):
     # With no classifier running, forcing the credential past T1 into T2 must
-    # fail CLOSED (503), proving the T1 short-circuit is really off.
+    # fail CLOSED, proving the T1 short-circuit is really off.
+    #
+    # Asserts the INTENT, not one specific code. 503 (upstream unreachable) and 504
+    # (upstream exceeded budget) are both the fail-closed shape, and which one wins is
+    # a race between the connect attempt and TOTAL_BUDGET_S. Raising T2_TIMEOUT_S from
+    # 1.2 s to 2.0 s — required because T2 on the 30B measures ~1.70 s, see the note in
+    # t2.py — flipped this from 503 to 504 without changing the behaviour under test.
+    # Pinning the code made the test sensitive to a timeout constant it was not written
+    # to police.
     monkeypatch.setattr(app_mod, "ABLATION", "t2_verify")
     r = _inspect(client, CRED)
-    assert r.status_code == 503
-    assert r.json()["error"] == "policy_denied"
+    assert r.status_code in (503, 504)
+    body = r.json()
+    assert body["error"] == "policy_denied"
+    assert body["action"] == "block"
 
 
 def test_full_row_unaffected(client, monkeypatch):
