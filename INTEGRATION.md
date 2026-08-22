@@ -246,3 +246,48 @@ python bench/report.py --selftest
 If `/v1/decisions` 404s, the `include_router` line from §1 is missing.
 If retrieval returns zero clauses, check `queryable`, **not** the embeddings — a
 `$vectorSearch` against a non-READY index returns empty results rather than an error.
+
+---
+
+# Round 3 — closing INTEGRATION-B.md §2
+
+## 8. `ConsoleHub.set_metric()` now has a caller (C's gap, found by B)
+
+**Severity: medium — the unified-memory proof rendered as UI was blank.**
+
+B was right: `_metric_loop()` is guarded by `if self._metrics`, and nothing anywhere in
+the tree called `set_metric()`. So `{"type":"metric"}` was never broadcast and both KV
+gauges read "—" for the entire demo.
+
+**Closed server-side in `stream.py`.** `ConsoleHub._scrape_loop()` polls
+`:8000/metrics` and `:8001/metrics` every 2 s while a console is attached, and reads
+`escalation_rate` off `/healthz` so B has one source rather than two. Read-only GETs —
+nothing is started, stopped or restarted (NFR-S1 is not in play).
+
+Why server-side when B already had it working: one scraper for the box instead of one
+per open console tab, and no browser→vLLM traffic at all. B's client already stands its
+own scrape down for 6 s when a server metric frame arrives, so the two do not fight —
+this wins automatically, exactly as B designed it.
+
+The counter name regex accepts both `vllm:kv_cache_usage_perc` (current) and
+`vllm:gpu_cache_usage_perc` (older), with and without labels, and rejects the
+`_total` variant. Verified end to end against a stub `/metrics` on both ports:
+
+```
+{"type":"metric","kv":{"kv_cache_text":0.3142,"kv_cache_vision":0.1207,"escalation_rate":0.0}}
+```
+
+**B — you can drop the client-side scrape whenever you like, or leave it as the fallback
+for when the gateway is restarting. Both work.**
+
+## Not changed, deliberately
+
+- **`/v1/decisions` returns raw documents while `ws /v1/stream` returns `_frame()`-shaped
+  ones** (INTEGRATION-B.md §1). B normalised it client-side and said nothing needs to
+  change server-side. Agreed — B's handler already accepts both shapes, so changing the
+  server now would add risk during freeze for no visible gain. Worth tidying after the
+  hackathon, not during it.
+- **`results/scores_benign.json`** is now the agreed object shape on disk; B's §3 was
+  closed by the merge. Still `corpus_is_real: false`, and still perfectly separated, so
+  the slider reads 0.00% FPR at every τ. **Do not rehearse the slider against it** — one
+  real harness run against a live classifier fixes both.

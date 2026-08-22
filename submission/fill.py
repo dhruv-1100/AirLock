@@ -51,6 +51,46 @@ def pct(x, places=2):
     return "n/a" if x is None else f"{x * 100:.{places}f}%"
 
 
+def corpus_facts() -> dict[str, str]:
+    """Derive the corpus provenance table and the SPOKEN sentence from the manifest.
+
+    These were hardcoded in SUBMISSION.md and PITCH.md as "six sources — 400 WildChat,
+    200 Stack Exchange, 120 CFPB…". The first real build on the GB10 produced a very
+    different mix (CFPB's API is retired; sources that fail get redistributed onto ones
+    with surplus). Reading actual counts off the manifest is the difference between a
+    provenance claim and a fabricated one — C reads this sentence out loud on stage.
+    """
+    m_path = Path("data/benign_v1.manifest.json")
+    if not m_path.exists():
+        return {}
+    m = json.loads(m_path.read_text())
+    used = [s for s in m.get("sources", []) if s.get("got", 0) > 0]
+
+    rows = ["| Source | n | Licence | Method | URL |", "|---|---|---|---|---|"]
+    for s in used:
+        rows.append(
+            f"| {s['name']} | {s['got']} | {s['license']} | {s.get('method') or '—'} "
+            f"| {s['url']} |"
+        )
+    missing = [s["name"] for s in m.get("sources", []) if s.get("got", 0) == 0]
+    if missing:
+        rows.append("")
+        rows.append(
+            f"*Not available at build time and redistributed across the sources above: "
+            f"{', '.join(missing)}.* The denominator is unchanged at {m.get('n')}; the "
+            f"counts here are what was actually used."
+        )
+
+    # The spoken line. Numbers are read out, so they must be the real ones.
+    spoken = ", ".join(f"{s['got']} from {s['name']}" for s in used)
+    return {
+        "CORPUS_TABLE": "\n".join(rows),
+        "CORPUS_SENTENCE": spoken,
+        "N_SOURCES": str(len(used)),
+        "CORPUS_N": str(m.get("n", "?")),
+    }
+
+
 def build_map(r: dict) -> dict[str, str]:
     n = r.get("n", 0)
     fpr = r.get("fpr")
@@ -106,6 +146,7 @@ def build_map(r: dict) -> dict[str, str]:
             m[f"FPR_{name}"] = pct(op.get("fpr"))
             m[f"RECALL_{name}"] = pct(op.get("recall"), 1)
     m.setdefault("FPR_BALANCED", m["FPR_STATEMENT"])
+    m.update(corpus_facts())
     return m
 
 

@@ -58,6 +58,7 @@ class Source:
     url: str
     hf: str | None = None           # HuggingFace dataset id, if loadable
     hf_split: str = "train"
+    hf_config: str | None = None    # some datasets REQUIRE a config name
     fields: tuple[str, ...] = ()    # candidate text fields, first match wins
     snapshot: str = ""
     notes: str = ""
@@ -81,7 +82,9 @@ SOURCES = [
     Source(
         "MBPP", 100, "CC-BY-4.0",
         "https://huggingface.co/datasets/google-research-datasets/mbpp",
-        hf="google-research-datasets/mbpp", fields=("text", "prompt"),
+        hf="google-research-datasets/mbpp", hf_config="full", fields=("text", "prompt"),
+        notes="prompt composed with its reference solution and tests — a bare MBPP "
+              "prompt is one line and does not resemble a real paste",
     ),
     Source(
         "HumanEval", 80, "MIT",
@@ -91,13 +94,15 @@ SOURCES = [
     Source(
         "CFPB", 120, "US Government / public domain",
         "https://www.consumerfinance.gov/data-research/consumer-complaints/",
-        fields=("Consumer complaint narrative", "complaint_what_happened", "narrative"),
-        notes="consumer complaint narratives; snapshot date recorded in the manifest",
+        fields=("Consumer complaint narrative", "complaint_what_happened", "narrative",
+                "_source.complaint_what_happened"),
+        notes="consumer complaint narratives, fetched live from the public CFPB API; "
+              "snapshot date recorded in the manifest",
     ),
     Source(
         "Wikipedia", 100, "CC BY-SA 4.0",
         "https://dumps.wikimedia.org/",
-        hf="wikimedia/wikipedia", fields=("text",),
+        hf="wikimedia/wikipedia", hf_config="20231101.en", fields=("text",),
         notes="lead paragraphs, one per article",
     ),
 ]
@@ -115,8 +120,36 @@ def _usable(t: str) -> bool:
 
 
 def _from_dump(src: Source, rng: random.Random) -> list[tuple[str, str]]:
-    """Load from a pre-staged local dump. Returns [(record_id, text)]."""
+    """Load from a pre-staged local dump. Returns [(record_id, text)].
+
+    Accepts .jsonl, .json and .csv. CSV matters for CFPB specifically: its public API
+    has been retired (the documented search endpoint 404s and api.consumerfinance.gov
+    redirects to an unrelated FFIEC page), so the only reliable route is the bulk CSV
+    export from the complaint database. Drop it at data/dumps/cfpb.csv.
+    """
     stem = src.name.lower().replace(" ", "_")
+
+    csv_path = DUMP_DIR / f"{stem}.csv"
+    if csv_path.exists():
+        try:
+            import csv as _csv
+
+            rows: list[dict] = []
+            with open(csv_path, newline="", encoding="utf-8", errors="replace") as f:
+                # CFPB narratives run long; the default field cap truncates them.
+                _csv.field_size_limit(10_000_000)
+                for r in _csv.DictReader(f):
+                    rows.append(r)
+                    if len(rows) >= src.n * 60:
+                        break
+            out = _extract(src, rows)
+            if out:
+                print(f"  · {src.name}: {len(out)} usable from dump {csv_path}")
+                src.method = "dump"
+                return out
+        except Exception as e:  # noqa: BLE001
+            print(f"  ! {src.name}: CSV at {csv_path} unreadable ({e})", file=sys.stderr)
+
     for ext in ("jsonl", "json"):
         p = DUMP_DIR / f"{stem}.{ext}"
         if not p.exists():
@@ -150,14 +183,30 @@ def _from_hf(src: Source, rng: random.Random) -> list[tuple[str, str]]:
         from datasets import load_dataset  # type: ignore
     except ImportError:
         return []
+
+    ds = None
     try:
-        # streaming keeps this cheap and avoids a multi-GB materialisation
-        ds = load_dataset(src.hf, split=src.hf_split, streaming=True)
-        rows = []
+        # Streaming keeps this cheap and avoids a multi-GB materialisation.
+        kw = {"split": src.hf_split, "streaming": True}
+        if src.hf_config:
+            ds = load_dataset(src.hf, src.hf_config, **kw)
+        else:
+            ds = load_dataset(src.hf, **kw)
+
+        # Stop as soon as we have a comfortable surplus instead of draining a fixed
+        # over-sample. On the first run this streamed 16k WildChat rows to keep 400.
+        want = max(src.n * 3, src.n + 50)
+        rows: list[dict] = []
+        kept = 0
         for i, row in enumerate(ds):
             rows.append(row)
-            if i >= src.n * 40:      # generous over-sample; we filter hard below
+            if len(rows) % 200 == 0:
+                kept = len(_extract(src, rows))
+                if kept >= want:
+                    break
+            if i >= src.n * 60:      # hard ceiling so a low-yield source cannot hang
                 break
+
         out = _extract(src, rows)
         if out:
             print(f"  · {src.name}: {len(out)} usable from HuggingFace {src.hf}")
@@ -166,6 +215,47 @@ def _from_hf(src: Source, rng: random.Random) -> list[tuple[str, str]]:
     except Exception as e:  # noqa: BLE001
         print(f"  ! {src.name}: HF load failed ({e})", file=sys.stderr)
         return []
+    finally:
+        # Drop the streaming iterator before we go anywhere near interpreter shutdown.
+        # A live retry thread during finalisation is what produced
+        # "PyGILState_Release: auto-releasing thread-state" and a core dump.
+        del ds
+
+
+def _from_cfpb_api(src: Source, rng: random.Random) -> list[tuple[str, str]]:
+    """CFPB has no HuggingFace mirror, so pull narratives from the public API.
+
+    Best-effort with a short timeout: this is one source out of six and it must never
+    be the reason the corpus does not get built.
+    """
+    url = (
+        "https://www.consumerfinance.gov/data-research/consumer-complaints/search/"
+        "api/v1/?size=800&no_aggs=true&has_narrative=true&format=json"
+        "&field=complaint_what_happened"
+    )
+    try:
+        import json as _json
+        import urllib.request
+
+        print(f"  · {src.name}: fetching from the public CFPB API …")
+        req = urllib.request.Request(url, headers={"User-Agent": "airlock-corpus/1.0"})
+        with urllib.request.urlopen(req, timeout=45) as r:
+            data = _json.loads(r.read().decode("utf-8", "replace"))
+    except Exception as e:  # noqa: BLE001
+        print(f"  ! {src.name}: API fetch failed ({e})", file=sys.stderr)
+        return []
+
+    hits = data.get("hits", {}).get("hits", data) if isinstance(data, dict) else data
+    out: list[tuple[str, str]] = []
+    for i, h in enumerate(hits if isinstance(hits, list) else []):
+        rec = h.get("_source", h) if isinstance(h, dict) else {}
+        text = _clean(rec.get("complaint_what_happened", ""))
+        if _usable(text):
+            out.append((f"cfpb:{rec.get('complaint_id', i)}", text))
+    if out:
+        print(f"  · {src.name}: {len(out)} usable from the CFPB API")
+        src.method = "api"
+    return out
 
 
 def _extract(src: Source, rows: list[dict]) -> list[tuple[str, str]]:
@@ -175,6 +265,43 @@ def _extract(src: Source, rows: list[dict]) -> list[tuple[str, str]]:
         if not isinstance(row, dict):
             if isinstance(row, str) and _usable(_clean(row)):
                 out.append((f"{src.name.lower()}:{i}", _clean(row)))
+            continue
+
+        # MBPP: a bare prompt is a single sentence ("Write a function to …") and is far
+        # under the 200-char floor — the first run kept 1 of 100. Nobody pastes a bare
+        # MBPP prompt either. Compose the realistic artifact instead: the problem, the
+        # code someone has so far, and the failing tests.
+        if src.name == "MBPP":
+            prompt = _clean(row.get("text") or row.get("prompt") or "")
+            code = _clean(row.get("code") or "")
+            tests = row.get("test_list") or []
+            if not prompt:
+                continue
+            parts = [prompt]
+            if code:
+                parts.append("Here's what I have so far:\n\n```python\n" + code + "\n```")
+            if isinstance(tests, list) and tests:
+                parts.append("It needs to satisfy:\n\n```python\n" + "\n".join(
+                    str(t) for t in tests[:3]) + "\n```")
+            parts.append("Is there a cleaner way to write this?")
+            text = "\n\n".join(parts)
+            rid = f"mbpp:{row.get('task_id', i)}"
+            if _usable(text):
+                out.append((rid, text))
+            continue
+
+        # HumanEval: prompt is signature + docstring; append the reference solution so
+        # the item reads like a real code paste rather than a stub.
+        if src.name == "HumanEval":
+            prompt = _clean(row.get("prompt") or "")
+            sol = _clean(row.get("canonical_solution") or "")
+            if not prompt:
+                continue
+            text = "```python\n" + prompt + ("\n" + sol if sol else "") + "\n```\n\n" \
+                   "Why does this fail on the edge case where the input is empty?"
+            rid = f"humaneval:{row.get('task_id', i)}"
+            if _usable(text):
+                out.append((rid, text))
             continue
 
         # WildChat: first USER turn only, and honour the dataset's own safety flags.
@@ -256,25 +383,66 @@ def build(seed: int, out_path: Path, allow_synthetic: bool) -> int:
     print(f"building benign corpus (seed={seed})")
     print(f"looking for pre-staged dumps in: {DUMP_DIR.resolve()}")
 
+    # ---- pass 1: gather every source that works, never aborting on one that does not.
+    # The first run on the box lost real WildChat, StackExchange and HumanEval pulls
+    # because CFPB was missing and the script exited immediately. Downloads are the
+    # expensive part; never throw one away.
+    pools: dict[str, list[tuple[str, str]]] = {}
+    failed: list[Source] = []
     for src in SOURCES:
-        pool = _from_dump(src, rng) or _from_hf(src, rng)
+        pool = _from_dump(src, rng)
+        if not pool and src.name == "CFPB":
+            pool = _from_cfpb_api(src, rng)
+        if not pool:
+            pool = _from_hf(src, rng)
+        if pool:
+            rng.shuffle(pool)
+            pools[src.name] = pool
+        else:
+            print(f"  ! {src.name}: no data available")
+            failed.append(src)
+
+    # ---- pass 2: redistribute any shortfall onto sources that have surplus.
+    # n = 1000 is the denominator the whole submission rests on; six sources is a
+    # robustness property, not the headline. The manifest records exactly what was
+    # actually used, so the provenance table stays honest either way.
+    shortfall = sum(s.n for s in failed)
+    if shortfall and not allow_synthetic:
+        donors = [s for s in SOURCES if s.name in pools
+                  and len(pools[s.name]) > s.n + 20]
+        if not donors:
+            print(
+                f"\nFATAL: {shortfall} items short and no source has surplus to cover it.\n"
+                f"  Missing: {', '.join(s.name for s in failed)}\n"
+                f"  Stage a dump in {DUMP_DIR}/ or re-run with --allow-synthetic.\n",
+                file=sys.stderr,
+            )
+            return 2
+        print(f"\n  redistributing {shortfall} items from {len(failed)} unavailable "
+              f"source(s) across {len(donors)} with surplus:")
+        i = 0
+        while shortfall > 0:
+            d = donors[i % len(donors)]
+            if len(pools[d.name]) > d.n + 1:
+                d.n += 1
+                shortfall -= 1
+            elif all(len(pools[x.name]) <= x.n + 1 for x in donors):
+                break
+            i += 1
+        for d in donors:
+            print(f"    {d.name} -> {d.n}")
+
+    for src in SOURCES:
+        pool = pools.get(src.name, [])
 
         if not pool:
             if not allow_synthetic:
-                print(
-                    f"\nFATAL: no data for {src.name}.\n"
-                    f"  Stage a dump at {DUMP_DIR}/{src.name.lower().replace(' ', '_')}.jsonl\n"
-                    f"  or `pip install datasets` to pull {src.hf or '(no HF id)'},\n"
-                    f"  or re-run with --allow-synthetic to wire the harness against\n"
-                    f"  clearly-labelled placeholder text.\n",
-                    file=sys.stderr,
-                )
-                return 2
+                src.got = 0
+                src.method = "unavailable"
+                continue          # already accounted for by the redistribution above
             print(f"  ! {src.name}: NO REAL DATA — generating labelled placeholder text")
             pool = _synthetic(src, rng)
             any_synthetic = True
-
-        rng.shuffle(pool)
         # de-duplicate by content hash before truncating to n
         seen: set[str] = set()
         picked = []
@@ -331,6 +499,14 @@ def build(seed: int, out_path: Path, allow_synthetic: bool) -> int:
             for s in SOURCES
         ],
     }
+    # Honest about what this flag does and does not mean. `corpus_is_real: true` asserts
+    # only that no record was generated by this script — it CANNOT verify that a dump you
+    # staged contains authentic human text. A file of word salad at data/dumps/ would pass.
+    # The provenance table, not this boolean, is what a reviewer should be reading.
+    manifest["corpus_is_real_means"] = (
+        "No record was generated by this script. It does NOT verify that a staged dump "
+        "contains authentic text — check the provenance table and the source URLs."
+    )
     if any_synthetic:
         manifest["WARNING"] = (
             "THIS CORPUS CONTAINS SYNTHETIC PLACEHOLDER TEXT. It exists to wire the "
@@ -408,4 +584,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _code = main()
+    # HuggingFace's streaming stack keeps background retry threads alive. Letting the
+    # interpreter finalise while one is mid-retry produced
+    # "Fatal Python error: PyGILState_Release" and a core dump AFTER the corpus had been
+    # written — a successful run that looked like a crash. Flush, then leave immediately
+    # rather than running finalisers we do not need.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_code)

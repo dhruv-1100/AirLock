@@ -23,6 +23,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, Awaitable, Callable
 
@@ -31,6 +32,20 @@ log = logging.getLogger("airlock.stream")
 TOKEN_FILE = os.getenv("AIRLOCK_RESUME_TOKEN_FILE", ".airlock_resume_token")
 METRIC_INTERVAL_S = 2.0
 PING_INTERVAL_S = 15.0
+
+# vLLM /metrics endpoints, scraped for the KV-cache gauges (SRS §5.3).
+# READ-ONLY GETs. This starts, stops and restarts nothing — NFR-S1 is not in play.
+TEXT_METRICS = os.getenv("AIRLOCK_TEXT_METRICS", "http://127.0.0.1:8000/metrics")
+VISION_METRICS = os.getenv("AIRLOCK_VISION_METRICS", "http://127.0.0.1:8001/metrics")
+HEALTHZ_URL = os.getenv("AIRLOCK_HEALTHZ", "http://127.0.0.1:8787/healthz")
+
+# vLLM renamed this counter. Current builds emit `vllm:kv_cache_usage_perc`; older ones
+# emit `vllm:gpu_cache_usage_perc`. Accept both rather than pinning to one and silently
+# reading nothing on the other. Verified by B against the live :8000 output on the box.
+_KV_RE = re.compile(
+    r"^vllm:(?:kv_cache|gpu_cache)_usage_perc(?:\{[^}]*\})?\s+([0-9.eE+-]+)\s*$",
+    re.MULTILINE,
+)
 
 
 # --------------------------------------------------------------------------- token persistence
@@ -149,6 +164,7 @@ class ConsoleHub:
             asyncio.create_task(tail_decisions(self._on_decision)),
             asyncio.create_task(self._ping_loop()),
             asyncio.create_task(self._metric_loop()),
+            asyncio.create_task(self._scrape_loop()),
         ]
         log.info("console hub started")
 
@@ -244,6 +260,62 @@ class ConsoleHub:
             await asyncio.sleep(METRIC_INTERVAL_S)
             if self._metrics and self._clients:
                 await self.broadcast({"type": "metric", "kv": dict(self._metrics)})
+
+    # -- vLLM /metrics scrape ---------------------------------------------
+    async def _scrape_loop(self) -> None:
+        """Populate the KV gauges from both vLLM servers (SRS §5.3).
+
+        Closes INTEGRATION-B.md §2: `set_metric()` previously had no caller anywhere in
+        the tree, so `{"type":"metric"}` was never broadcast and both gauges read "—" for
+        the whole demo. B worked around it by scraping `:8000` and `:8001` from the
+        browser; doing it here means one scraper for the whole box instead of one per
+        open console tab, and no browser→vLLM traffic at all. B's client stands its own
+        scrape down for 6 s whenever a server metric frame arrives, so the two do not fight.
+
+        **Two models' KV gauges moving on one screen is the unified-memory proof rendered
+        as UI** — that is what this exists for.
+
+        Read-only GETs with a short timeout. Scrapes only while a console is attached, so
+        it costs nothing when nobody is watching. Every failure is silent by design: both
+        servers are down for most of the build day and a log line every 2 s would bury
+        everything else.
+        """
+        try:
+            import httpx
+        except ImportError:
+            log.info("httpx unavailable — KV gauges will stay empty")
+            return
+
+        async with httpx.AsyncClient(timeout=1.0) as client:
+            while True:
+                await asyncio.sleep(METRIC_INTERVAL_S)
+                if not self._clients:
+                    continue  # nobody watching; do not poll the box for nothing
+
+                for key, url in (
+                    ("kv_cache_text", TEXT_METRICS),
+                    ("kv_cache_vision", VISION_METRICS),
+                ):
+                    try:
+                        r = await client.get(url)
+                        if r.status_code != 200:
+                            continue
+                        m = _KV_RE.search(r.text)
+                        if m:
+                            self.set_metric(key, round(float(m.group(1)), 4))
+                    except Exception:  # noqa: BLE001
+                        self._metrics.pop(key, None)  # server went away; drop the stale gauge
+
+                # escalation_rate lives on A's /healthz (the router owns the counters).
+                # Surfacing it in the same frame means B reads one source, not two.
+                try:
+                    r = await client.get(HEALTHZ_URL)
+                    if r.status_code == 200:
+                        h = r.json()
+                        if isinstance(h.get("escalation_rate"), (int, float)):
+                            self.set_metric("escalation_rate", round(h["escalation_rate"], 4))
+                except Exception:  # noqa: BLE001
+                    pass
 
 
 # --------------------------------------------------------------------------- smoke test
