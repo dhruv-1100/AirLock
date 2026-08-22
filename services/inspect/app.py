@@ -22,7 +22,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import verify as verify_mod
-from .calib import p_block_from_logprobs
+from .calib import label_logits_from_logprobs, p_block_from_logprobs
 from .schemas import (DEFAULT_MODE, LABEL_TO_CLAUSE, MODES, error_body,
                       verdict_body)
 from .tiers import gate_img, t0, t1, t2, t3
@@ -31,6 +31,14 @@ from .verify import verify
 MAX_BODY = 8 * 1024 * 1024
 MAX_INFLIGHT = 32
 TOTAL_BUDGET_S = 2.3
+
+# Phase 3 ablation rows (SRS §10 Phase 3 item 5) — each row is a real run of
+# the service under a different router config, driven by bench/run_ablation.py:
+#   full         normal router (default)
+#   t1_only      CACHE/T2 off; only T1-HIGH may block
+#   t2_noverify  T0/T1-block/CACHE off; everything to T2, span verification OFF
+#   t2_verify    same but span verification ON (row3 − row2 = the finding)
+ABLATION = os.environ.get("AIRLOCK_ABLATION", "full")
 
 # C owns mongo.py; the cache degrades to in-process when it is absent so A is
 # never blocked on C (Phase-0 parallelism rule). mongo.py itself no-ops every
@@ -104,7 +112,10 @@ async def healthz():
     clf, vlm = await asyncio.gather(
         _probe(t2.CLF_BASE_URL.rsplit("/v1", 1)[0] + "/health"),
         _probe(t3.VLM_BASE_URL.rsplit("/v1", 1)[0] + "/health"))
-    return {"ok": True, "clf": clf, "vlm": vlm, "mongo": _HAVE_MONGO,
+    # Real ping, not import success — INTEGRATION.md §6: with only _HAVE_MONGO
+    # a dead mongod looks healthy until the console is empty on stage.
+    return {"ok": True, "clf": clf, "vlm": vlm,
+            "mongo": (await mongo.healthy()) if _HAVE_MONGO else False,
             "uptime_s": int(time.monotonic() - _started),
             "overrides": verify_mod.override_count,
             "img_gate": {"seen": gate_img.seen_count,
@@ -173,7 +184,7 @@ async def _finish(body, key, *, origin="", text="", n_images=0, cache=False):
         body["decision_id"] = await mongo.write_decision(
             body, key, origin=origin, chars=len(text), images=n_images,
             payload_text=text if body["action"] in ("block", "warn") else None)
-    if cache and body["action"] == "block":
+    if cache and body["action"] == "block" and ABLATION == "full":
         _cache[key] = body
     return JSONResponse(body)
 
@@ -194,13 +205,13 @@ async def _route(req, rid):
     # ---- CACHE — sha256 replay, ~1 ms: in-process first, then Mongo -------
     key = hashlib.sha256(
         (text + "".join(im.get("b64", "") for im in images)).encode()).hexdigest()
-    hit = _cache.get(key)
+    hit = _cache.get(key) if ABLATION == "full" else None
     if hit:
         hit = dict(hit)
         hit.update(request_id=rid, tier="CACHE",
                    latency_ms=int((time.monotonic() - t_start) * 1000))
         return JSONResponse(hit)
-    if _HAVE_MONGO:
+    if _HAVE_MONGO and ABLATION == "full":
         # Mongo decisions doc → verdict body (fields differ; binaries dropped).
         doc = await mongo.get_by_hash(key)
         if doc:
@@ -275,7 +286,8 @@ async def _route(req, rid):
                              n_images=1, cache=True)
 
     # ---- T0 — trivial gate ------------------------------------------------
-    if modality == "text" and t0.is_trivial(text):
+    if (modality == "text" and t0.is_trivial(text)
+            and ABLATION not in ("t2_noverify", "t2_verify")):
         body = _respond(
             rid, action="allow", label="BENIGN", severity="NONE",
             reason="Trivial payload", spans=[], verified=True, p_block=0.0,
@@ -285,7 +297,7 @@ async def _route(req, rid):
 
     # ---- T1 — deterministic scan ------------------------------------------
     scan = t1.scan(text)
-    if scan.confidence == "HIGH":
+    if scan.confidence == "HIGH" and ABLATION not in ("t2_noverify", "t2_verify"):
         body = _respond(
             rid, action=block_action(), label=scan.label, severity="HIGH",
             reason=f"Deterministic detector: {scan.detector}",
@@ -294,9 +306,19 @@ async def _route(req, rid):
             model="none", modality=modality, t_start=t_start)
         return await _finish(body, key, origin=origin, text=text, cache=True)
 
+    if ABLATION == "t1_only":
+        # Row 1: no LLM. Whatever T1 could not block is an allow.
+        body = _respond(
+            rid, action="allow", label="BENIGN", severity="NONE",
+            reason=f"T1-only ablation; hints suppressed: {scan.hints}",
+            spans=[], verified=True, p_block=0.0, threshold=threshold,
+            tier="T1", model="none", modality=modality, t_start=t_start)
+        return await _finish(body, key, origin=origin, text=text)
+
     # ---- T2 — LLM classifier, guided JSON, span-verified ------------------
     verdict, logprobs, model = await t2.classify(text, hints=scan.hints or None)
-    verdict = verify(verdict, text)
+    if ABLATION != "t2_noverify":  # row 2 measures the cost of skipping this
+        verdict = verify(verdict, text)
     p_block = p_block_from_logprobs(logprobs, verdict)
     label = verdict["label"]
     blocked = label != "BENIGN" and p_block >= threshold
@@ -313,6 +335,13 @@ async def _route(req, rid):
         tier="T2" if modality == "text" else "T3",
         model=f"airlock-clf/{model}", modality=modality, t_start=t_start,
         clause_id=verdict.get("policy_clause_id") if blocked else "NONE")
+    if req.get("debug_label_logits"):
+        # Harness-only (bench/fit_calibration.py): raw label logits so the
+        # temperature sweep is offline. Never set by the extension.
+        try:
+            body["label_logits"] = label_logits_from_logprobs(logprobs)
+        except (KeyError, ValueError, TypeError):
+            body["label_logits"] = None
     return await _finish(body, key, origin=origin, text=text, cache=True)
 
 
