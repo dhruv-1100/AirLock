@@ -391,20 +391,30 @@
   }
 
   function cascadeHTML(v) {
-    const t = v && v.tier_timings;
-    if (!t || typeof t !== 'object') return '';
-    const deciding = v.tier;                       // the stage that produced the verdict
+    const raw = v && v.tier_timings;
+    if (!raw || typeof raw !== 'object') return '';
+
+    // Case-fold the keys. B's proposed example was {"cache":…} and A shipped {"CACHE":…};
+    // matching case-sensitively meant the cache cell read "not run" on a decision that
+    // had in fact hit it. Not worth a round trip over — normalise and move on.
+    const t = {};
+    for (const k of Object.keys(raw)) t[String(k).toLowerCase()] = raw[k];
+
+    const deciding = String(v.tier || '').toUpperCase();  // the stage that decided
     const usedModel = deciding === 'T2' || deciding === 'T3';
 
     const cells = CASCADE.map((st) => {
-      const ran = Object.prototype.hasOwnProperty.call(t, st.key) && t[st.key] != null;
+      const k = st.key.toLowerCase();
+      // Present means the stage ran — including a legitimate 0.0 for a sub-microsecond
+      // T0. Absent means it did not run. Never inferred from the value.
+      const ran = Object.prototype.hasOwnProperty.call(t, k) && t[k] != null;
       let cls = 'stage';
       if (!ran) cls += ' skipped';
-      else if (st.key === deciding) cls += (st.key === 'T2' || st.key === 'T3') ? ' model' : ' resolved';
+      else if (st.name === deciding) cls += (deciding === 'T2' || deciding === 'T3') ? ' model' : ' resolved';
       else cls += ' ran';
       return `<div class="${cls}" title="${esc(st.hint)}">
                 <div class="sn">${esc(st.name)}</div>
-                <div class="sv">${ran ? esc(fmtMs(Number(t[st.key]))) : 'not run'}</div>
+                <div class="sv">${ran ? esc(fmtMs(Number(t[k]))) : 'not run'}</div>
               </div>`;
     }).join('');
 
