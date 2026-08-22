@@ -195,8 +195,10 @@ def _from_dump(src: Source, rng: random.Random) -> list[tuple[str, str]]:
     if env_override:
         csv_candidates.insert(0, Path(env_override))
 
+    tried: list[str] = []
     for csv_path in csv_candidates:
         if not csv_path.exists():
+            tried.append(str(csv_path))
             continue
         try:
             import csv as _csv
@@ -241,6 +243,18 @@ def _from_dump(src: Source, rng: random.Random) -> list[tuple[str, str]]:
                   file=sys.stderr)
         except Exception as e:  # noqa: BLE001
             print(f"  ! {src.name}: CSV at {csv_path} unreadable ({e})", file=sys.stderr)
+
+    # A source that expects a CSV and found none must SAY SO. Failing silently here sent
+    # CFPB down the (retired) API path with no indication the file was simply not where
+    # we looked — which reads as "the API is broken" rather than "wrong path".
+    if tried and src.hf is None and not any(
+        (DUMP_DIR / f"{stem}.{e}").exists() for e in ("jsonl", "json")
+    ):
+        print(f"  · {src.name}: no CSV found. Looked in:", file=sys.stderr)
+        for t in tried:
+            print(f"      {Path(t).resolve()}", file=sys.stderr)
+        print(f"    Override with: AIRLOCK_{src.name.upper().replace('-', '_')}_CSV=/abs/path.csv",
+              file=sys.stderr)
 
     for ext in ("jsonl", "json"):
         p = DUMP_DIR / f"{stem}.{ext}"
