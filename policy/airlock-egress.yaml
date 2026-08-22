@@ -1,0 +1,46 @@
+# policy/airlock-egress.yaml — owner C. SRS §S2.1 artifact (1) of 3.
+#
+# Airlock's egress contract as a reviewable object. Applied with:
+#
+#   nemoclaw airlock policy add --from-file ./policy/airlock-egress.yaml --dry-run   # show the room
+#   nemoclaw airlock policy add --from-file ./policy/airlock-egress.yaml --yes
+#   nemoclaw airlock policy list                                                     # ours shows [user-added]
+#
+# Presets are recorded WITH the sandbox, content and all, and replayed on rebuild and on
+# snapshot-restore. That is a genuine reproducibility claim and it is why this file is a
+# submission artifact rather than a setup step.
+#
+# Authoring rules that actually bite (get these wrong and it fails at load, on the day):
+#   · preset.name must be a lowercase RFC-1123 label.
+#   · Catch-alls (`*`, 0.0.0.0/0, ::/0) are REJECTED at load.
+#   · Wildcards are permitted ONLY in the first DNS label.
+#   · An endpoint with no matching `binaries` entry AUTHORISES NOTHING. This is the
+#     single most common silent failure — the policy loads, and then nothing works.
+#
+# VERIFY-AT-10:00 — resolve the real interpreter paths before applying, do not assume:
+#   nemoclaw airlock exec -- which python3
+#   nemoclaw airlock exec -- which openclaw
+
+preset:
+  name: airlock-egress
+  description: "Airlock inspection plane: host-local vision model only, one verb, one path."
+
+network_policies:
+  airlock_vlm:
+    name: airlock_vlm
+    endpoints:
+      - host: host.openshell.internal
+        port: 8081
+        protocol: rest
+        enforcement: enforce
+        allowed_ips: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+        rules:
+          # The entire authorised surface of our vision model: one verb, one path.
+          - allow: { method: POST, path: "/v1/chat/completions" }
+        deny_rules:
+          # Model enumeration is not needed by the agent and is a reconnaissance
+          # primitive. Denied explicitly so the denial is visible in the audit log.
+          - { method: "*", path: "/v1/models/**" }
+    binaries:
+      - { path: /usr/local/bin/openclaw }
+      - { path: /usr/bin/python3 }

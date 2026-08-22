@@ -1,0 +1,57 @@
+// policy/openclaw-policy.jsonc — owner C. SRS §S2.1 artifact (3) of 3.
+//
+// Config-level attestation of the agent's posture, hash-attested:
+//
+//   openclaw plugins enable policy
+//   openclaw policy check --json --severity-min error | tee evidence/openclaw-policy-check.json
+//   openclaw policy compare --baseline policy/openclaw-policy.jsonc --json
+//
+// A clean check emits policy, evidence, findings and ATTESTATION HASHES over
+// models.providers.deny and dataHandling.telemetry.denyContentCapture.
+//
+// ======================= THE CAVEAT WE STATE OURSELVES =======================
+// This plugin verifies CONFIG-LEVEL CONFORMANCE ONLY. It does not enforce tool calls
+// and does not rewrite runtime behaviour at request time. Runtime enforcement is
+// OpenShell's proxy; this file is the attestation of the posture around it.
+//
+// Saying that ourselves is worth more than overclaiming and being caught saying it.
+// It goes on the slide in those words.
+// =============================================================================
+{
+  // No cloud model provider may be selected, by name, at config level.
+  // The runtime version of this claim is OpenShell returning 403 policy_denied at the
+  // proxy for every one of these hosts — enforced outside the sandbox, unmodifiable
+  // from within it.
+  "models": {
+    "providers": {
+      "deny": ["openai", "anthropic", "openrouter", "google", "groq", "deepseek", "mistral"]
+    }
+  },
+
+  // The agent has no business reaching private network space.
+  "network": { "privateNetwork": { "allow": false } },
+
+  // The gateway stays on loopback, authenticated, with no remote or tunnelled exposure.
+  "gateway": {
+    "exposure": { "allowNonLoopbackBind": false, "allowTailscaleFunnel": false },
+    "auth": { "requireAuth": true },
+    "controlUi": { "allowInsecure": false },
+    "remote": { "allow": false }
+  },
+
+  // A DLP product that ships your blocked content to a telemetry endpoint is worse than
+  // no DLP product. denyContentCapture is the line that makes the rest credible.
+  "dataHandling": {
+    "sensitiveLogging": { "requireRedaction": true },
+    "telemetry": { "denyContentCapture": true },
+    "memory": { "denySessionTranscriptIndexing": true }
+  },
+
+  // The answerer needs to read and reason. It does not need to execute, escalate, or
+  // reach outside its workspace.
+  "tools": {
+    "elevated": { "allow": false },
+    "exec": { "allowHosts": ["sandbox"] },
+    "fs": { "requireWorkspaceOnly": true }
+  }
+}
