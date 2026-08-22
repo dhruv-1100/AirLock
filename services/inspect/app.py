@@ -30,7 +30,13 @@ from .verify import verify
 
 MAX_BODY = 8 * 1024 * 1024
 MAX_INFLIGHT = 32
-TOTAL_BUDGET_S = 2.3
+# 2.3 s is the INTERACTIVE budget: it exists so a browser paste renders a verdict
+# inside B's 2500 ms client AbortController. The FP-rate harness runs direct over HTTP
+# with no browser in the loop (NFR-T5) and is measuring the DETECTOR, not keystroke
+# latency — and it drives concurrent load, under which a 1.7 s T2 call queues past 2.3 s
+# and every item returns 504. That is what produced a 100% FPR with tier mix {'ERR':1000}.
+# The harness raises this via AIRLOCK_TOTAL_BUDGET_S; the demo path keeps 2.3 s.
+TOTAL_BUDGET_S = float(os.getenv("AIRLOCK_TOTAL_BUDGET_S", "2.3"))
 
 # Phase 3 ablation rows (SRS §10 Phase 3 item 5) — each row is a real run of
 # the service under a different router config, driven by bench/run_ablation.py:
