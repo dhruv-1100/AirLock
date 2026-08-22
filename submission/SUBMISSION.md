@@ -23,9 +23,8 @@ cited policy clause, and re-routes the question to a 35B model on the box so the
 still gets an answer.**
 
 We measured a **{{FPR_HEADLINE}}** false-positive rate over **{{N}} benign pastes we did
-not write** — real ChatGPT prompts, Stack Exchange questions, code problems, consumer
-complaints and encyclopaedia text, from six independently-licensed sources. The published
-industry average for DLP false positives is **51%**.
+not write**, drawn from {{N_SOURCES}} independently-licensed public sources of real
+human-written text. The published industry average for DLP false positives is **51%**.
 
 That number is the submission. Everything else is how we got it and why it holds.
 
@@ -63,7 +62,7 @@ it.
 | | |
 |---|---|
 | **False-positive rate** | **{{FPR_STATEMENT}}** |
-| Denominator | {{N}} benign pastes, six sources, none written by us |
+| Denominator | {{N}} benign pastes, {{N_SOURCES}} sources, none written by us |
 | Threshold | {{THRESHOLD}} (Balanced) — selected on dev, reported on test |
 | Latency p50 / p95 | {{P50}} ms / {{P95}} ms |
 | Escalation rate (reached a model at all) | {{ESCALATION}} |
@@ -89,17 +88,12 @@ its recall is zero, whatever the datasheet said.
 
 ### Corpus provenance
 
-| Source | n | Licence | Why it is in the set |
-|---|---|---|---|
-| WildChat-1M | 400 | ODC-BY | Real prompts real people sent to a chat model. The closest thing that exists to our actual input distribution. |
-| Stack Exchange | 200 | CC BY-SA 4.0 | Long technical text full of code, identifiers and numbers — the hardest benign case for a naive detector. |
-| MBPP | 100 | CC-BY-4.0 | Programming problems. Code that must not be mistaken for proprietary code. |
-| HumanEval | 80 | MIT | Docstring-heavy code, different register from MBPP. |
-| CFPB complaint narratives | 120 | US Gov / public domain | Human-written prose about financial matters, containing no live PII. Financial vocabulary without confidentiality. |
-| Wikipedia | 100 | CC BY-SA 4.0 | General prose, long, with dates and figures. |
+{{CORPUS_TABLE}}
 
-Six independent sources, so no single licence challenge can sink the denominator. The
-corpus is regenerable from one seeded command; full per-record provenance
+Multiple independent sources, so no single licence challenge can sink the denominator.
+Where a source was unavailable at build time its share was redistributed across the
+others and the manifest records the actual counts — the table above is what was used,
+not what was planned. The corpus is regenerable from one seeded command; full per-record provenance
 (`id, source, licence, sha256, char_len, provenance_url`) is in
 `data/benign_v1.manifest.json` and `data/ATTRIBUTION.md`.
 

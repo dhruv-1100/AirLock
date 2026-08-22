@@ -144,10 +144,14 @@ list again → still blocked. `free -h` and both `/v1/models` visible on A's ter
 > Three pastes is a demo. Here's the detector.
 >
 > We measured a **[X]%** false-positive rate, ninety-five percent confidence interval
-> **[a, b]**, over **one thousand benign pastes we did not write** — four hundred real
-> ChatGPT prompts from WildChat, two hundred Stack Exchange questions, a hundred and
-> eighty code problems from MBPP and HumanEval, a hundred and twenty consumer-finance
-> complaints, and a hundred Wikipedia paragraphs.
+> **[a, b]**, over **[CORPUS_N] benign pastes we did not write** — [CORPUS_SENTENCE].
+>
+> *(Read the real counts off `data/benign_v1.manifest.json`, or run
+> `python submission/fill.py` which substitutes them. **Do not read the numbers that
+> were in the plan** — the first real build produced a different mix because one
+> source's API had been retired and its share was redistributed. Saying "a hundred and
+> twenty consumer-finance complaints" when there are none is the one mistake on this
+> page that a judge could call fabrication.)*
 >
 > The published industry average for DLP false positives is fifty-one percent.
 
