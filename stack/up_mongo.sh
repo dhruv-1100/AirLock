@@ -66,7 +66,7 @@ else
   # --cpus=4 pins GC thread sizing off 4 cores, not all 20 Arm cores.
   say "launching $NAME ($IMAGE) with a 6 GB cgroup"
   docker run -d --name "$NAME" --platform linux/arm64 \
-    --memory=6g --memory-swap=6g --cpus=4 -p 27017:27017 \
+    --memory=6g --memory-swap=6g --cpus=4 -p 127.0.0.1:27017:27017 \
     -v "$VOLUME":/data/db -e DO_NOT_TRACK=1 \
     -e MONGODB_INITDB_DATABASE=airlock "$IMAGE" >/dev/null
 fi
@@ -115,7 +115,7 @@ else
   warn "heap cap did NOT take — applying JAVA_TOOL_OPTIONS fallback and recreating"
   docker rm -f "$NAME" >/dev/null
   docker run -d --name "$NAME" --platform linux/arm64 \
-    --memory=6g --memory-swap=6g --cpus=4 -p 27017:27017 \
+    --memory=6g --memory-swap=6g --cpus=4 -p 127.0.0.1:27017:27017 \
     -v "$VOLUME":/data/db -e DO_NOT_TRACK=1 \
     -e JAVA_TOOL_OPTIONS="-Xms1g -Xmx2g" \
     -e MONGODB_INITDB_DATABASE=airlock "$IMAGE" >/dev/null

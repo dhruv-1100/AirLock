@@ -50,6 +50,7 @@
     gap: 8px; padding: 1px 12px; white-space: nowrap;
     border-left: 2px solid transparent;
   }
+  .feed .ln > span { overflow: hidden; text-overflow: ellipsis; }
   .feed .ln:hover { background: rgba(255,255,255,.04); }
   .feed .ln.block { border-left-color: #f87171; }
   .feed .ln.allow { border-left-color: rgba(74,222,128,.35); }
@@ -146,9 +147,9 @@
       <div class="sect">
         <h4>Unified memory · both models, one pool</h4>
         <div class="gauges">
-          <div class="g"><div class="gl"><span>KV text 35B</span><span class="gv kv-text">—</span></div>
+          <div class="g"><div class="gl"><span>KV text 30B</span><span class="gv kv-text">—</span></div>
             <div class="track"><div class="fill text" style="width:0"></div></div></div>
-          <div class="g"><div class="gl"><span>KV vision 7B</span><span class="gv kv-vision">—</span></div>
+          <div class="g"><div class="gl"><span>KV vision 30B</span><span class="gv kv-vision">—</span></div>
             <div class="track"><div class="fill vision" style="width:0"></div></div></div>
         </div>
         <div class="shared">Two vLLM processes, one 128 GB pool. Escalation to an LLM: <b class="esc">—</b> of pastes.</div>

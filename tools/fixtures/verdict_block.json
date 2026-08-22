@@ -7,13 +7,15 @@
   "policy_clause_id": "POL-004",
   "policy_clause_text": "Customer-identifying records must not leave managed endpoints.",
   "reason": "12 rows of name,email,phone,plan,mrr",
-  "evidence_spans": ["ana.ruiz@northwind.example,+1-415-555-0142,Pro,4200"],
+  "evidence_spans": [
+    "ana.ruiz@northwind.example,+1-415-555-0142,Pro,4200"
+  ],
   "evidence_verified": true,
   "score": 0.94,
   "p_block": 0.94,
   "threshold": 0.55,
   "tier": "T2",
-  "model": "airlock-clf/qwen3-4b",
+  "model": "airlock-clf/nemotron-3.5-lightning-30b",
   "modality": "text",
   "latency_ms": 312,
   "bytes_egressed": 0,
@@ -22,8 +24,18 @@
     "value": 0.0306,
     "description": "sum of reciprocal rank fusion scores across input pipelines, weighted by pipeline weight",
     "details": [
-      {"inputPipelineName": "semantic", "rank": 1, "weight": 0.7, "value": 0.0115},
-      {"inputPipelineName": "lexical", "rank": 2, "weight": 0.3, "value": 0.0048}
+      {
+        "inputPipelineName": "semantic",
+        "rank": 1,
+        "weight": 0.7,
+        "value": 0.0115
+      },
+      {
+        "inputPipelineName": "lexical",
+        "rank": 2,
+        "weight": 0.3,
+        "value": 0.0048
+      }
     ]
   }
 }
