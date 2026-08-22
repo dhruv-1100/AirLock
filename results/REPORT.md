@@ -36,6 +36,15 @@ Reproduce: `python bench/run_fpr.py --seed 1337 --n 1000 --threshold 0.55`
 | PAYMENT_CARD | 49 | 47 | 95.9% | [86.3%, 98.9%] |
 | PROPRIETARY_CODE | 46 | 45 | 97.8% | [88.7%, 99.6%] |
 
+## False positives by language
+
+The corpus is multilingual; the classifier prompt is English. This table
+reports that rather than asserting it.
+
+| Language | n | FP | FPR | 95% CI |
+|---|---|---|---|---|
+| unknown | 1000 | 4 | 0.40% | [0.16%, 1.02%] |
+
 ## Precision at prevalence
 
 The argument for why FPR matters more than recall.

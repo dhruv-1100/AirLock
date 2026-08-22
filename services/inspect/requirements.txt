@@ -26,3 +26,10 @@ pyyaml>=6                 # policy.yaml -> /v1/policy and the clause enum
 aiohttp>=3.10             # bench/run_fpr.py HTTP client
 scipy>=1.13               # bench/fit_calibration.py minimize_scalar T fit
 # matplotlib (optional, above) also draws bench/fit_calibration.py reliability.png
+
+# --- C: optional corpus tooling (CPU only) -------------------------------------
+# Without langdetect, build_benign.py tags language by Unicode SCRIPT: it separates
+# cjk/cyrillic/arabic/etc from Latin reliably but reports everything Latin-script as
+# "latin" rather than guessing "en". Install it to split that bucket into en/es/fr/de
+# for the per-language FP table. Never claims a precision it does not have either way.
+# langdetect>=1.0.9
