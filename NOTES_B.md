@@ -56,6 +56,11 @@ and no clicking — framing is identical run to run:
 | `…/tools/harness/#console` | console panel open, 40 decisions in the feed |
 | `…/tools/harness/#slider` | console open, threshold mid-drag at 0.42 |
 | `…/tools/harness/#unavailable` | the fail-closed card |
+| `…/tools/harness/#cascade` | cascade strip, escalated to T2 |
+| `…/tools/harness/#no-model` | cascade strip, resolved at T1 with no model call |
+| `…/tools/harness/#image` | beat 3 — image + marker chips (what ships today) |
+| `…/tools/harness/#image-ocr` | beat 3 — + the model's transcript, markers underlined |
+| `…/tools/harness/#image-box` | beat 3 — + boxes drawn on the image |
 
 Take these from the real Chrome you are demoing in — that is the honest source for a
 submission screenshot, and it costs about two minutes. **Do not ship the slider shot

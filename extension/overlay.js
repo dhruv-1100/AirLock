@@ -182,6 +182,62 @@
   button.primary:hover { background: rgba(110,168,254,.26); }
   button.ghost { margin-left: auto; opacity: .65; }
   button[disabled] { opacity: .45; cursor: default; }
+
+  /* ------------------------------------------------- the cascade (tier_timings) */
+  .cascade { margin-top: 13px; }
+  .cascade .cl { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+                 color: #7d868f; margin-bottom: 7px; }
+  .stages { display: flex; align-items: stretch; gap: 0; }
+  .stage {
+    flex: 1; padding: 8px 6px; text-align: center;
+    background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07);
+    border-right: 0; position: relative;
+  }
+  .stage:first-child { border-radius: 9px 0 0 9px; }
+  .stage:last-child { border-radius: 0 9px 9px 0; border-right: 1px solid rgba(255,255,255,.07); }
+  .stage .sn { font-size: 11px; font-weight: 650; color: #5d666f; letter-spacing: .03em; }
+  .stage .sv { font-size: 10.5px; color: #4d565f; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .stage.ran { background: rgba(110,168,254,.10); border-color: rgba(110,168,254,.28); }
+  .stage.ran .sn { color: #cfe0ff; }
+  .stage.ran .sv { color: #8ab4f8; }
+  .stage.resolved { background: rgba(74,222,128,.11); border-color: rgba(74,222,128,.32); }
+  .stage.resolved .sn { color: #bbf7d0; }
+  .stage.resolved .sv { color: #4ade80; }
+  .stage.model { background: rgba(192,132,252,.11); border-color: rgba(192,132,252,.32); }
+  .stage.model .sn { color: #e9d5ff; }
+  .stage.model .sv { color: #c084fc; }
+  .stage.skipped .sn::after { content: ''; }
+  .cascade .verdict-line { margin-top: 8px; font-size: 11.5px; color: #8a939d; line-height: 1.5; }
+  .cascade .verdict-line b { color: #4ade80; font-weight: 600; }
+  .cascade .verdict-line b.model { color: #c084fc; }
+
+  /* --------------------------------------------------- image evidence (beat 3) */
+  .imgwrap { margin-top: 13px; }
+  .imgshot { position: relative; display: inline-block; max-width: 100%;
+             border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,.09); }
+  .imgshot img { display: block; max-width: 100%; height: auto; }
+  .bbox { position: absolute; border: 2px solid #f87171; border-radius: 3px;
+          box-shadow: 0 0 0 9999px rgba(6,7,9,.30); }
+  .bbox .bl { position: absolute; left: -2px; top: -20px; white-space: nowrap;
+              background: #f87171; color: #16181d; font-size: 10px; font-weight: 700;
+              padding: 1px 5px; border-radius: 3px; }
+  .ocr {
+    margin-top: 9px; padding: 10px 12px; border-radius: 10px; max-height: 132px; overflow: auto;
+    background: rgba(0,0,0,.32); border: 1px solid rgba(255,255,255,.07);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px; line-height: 1.7; color: #9aa3ad; white-space: pre-wrap;
+  }
+  .ocr mark { background: rgba(248,113,113,.13); color: #ffd9d9;
+              border-bottom: 2px solid #f87171; border-radius: 2px; padding: 0 1px; }
+  .chips { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip-m {
+    font-size: 11px; padding: 4px 9px; border-radius: 6px;
+    background: rgba(248,113,113,.12); color: #fca5a5;
+    border: 1px solid rgba(248,113,113,.28);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .imgnote { margin-top: 7px; font-size: 11px; color: #8a939d; line-height: 1.5; }
+  
   .ok-note { margin-top: 10px; font-size: 12px; color: #4ade80; display: none; line-height: 1.5; }
   .ok-note.on { display: block; }
   .ok-note.warn { color: #fcd34d; }
@@ -310,6 +366,113 @@
     </details>`;
   }
 
+
+  // ------------------------------------------------------- cascade / tier_timings
+  // Additive: renders only when the verdict carries `tier_timings`. Everything below
+  // degrades to nothing if A has not shipped the field yet.
+  //
+  // The point of this strip is the stage that did NOT run. ~86% of pastes are resolved
+  // by T0/T1 with no model call at all, and that is the architecture claim — currently
+  // it is a sentence in the writeup and invisible on screen. A dimmed T2 next to a lit
+  // T1 says it without anyone having to narrate it.
+  const CASCADE = [
+    { key: 'cache', name: 'CACHE', hint: 'sha256 hit' },
+    { key: 'T0',    name: 'T0',    hint: 'trivial gate' },
+    { key: 'T1',    name: 'T1',    hint: 'detectors' },
+    { key: 'T2',    name: 'T2',    hint: 'text model' },
+    { key: 'T3',    name: 'T3',    hint: 'vision model' },
+  ];
+
+  function fmtMs(v) {
+    if (typeof v !== 'number') return '—';
+    if (v >= 100) return Math.round(v) + ' ms';
+    if (v >= 10) return v.toFixed(1) + ' ms';
+    return v.toFixed(2) + ' ms';
+  }
+
+  function cascadeHTML(v) {
+    const t = v && v.tier_timings;
+    if (!t || typeof t !== 'object') return '';
+    const deciding = v.tier;                       // the stage that produced the verdict
+    const usedModel = deciding === 'T2' || deciding === 'T3';
+
+    const cells = CASCADE.map((st) => {
+      const ran = Object.prototype.hasOwnProperty.call(t, st.key) && t[st.key] != null;
+      let cls = 'stage';
+      if (!ran) cls += ' skipped';
+      else if (st.key === deciding) cls += (st.key === 'T2' || st.key === 'T3') ? ' model' : ' resolved';
+      else cls += ' ran';
+      return `<div class="${cls}" title="${esc(st.hint)}">
+                <div class="sn">${esc(st.name)}</div>
+                <div class="sv">${ran ? esc(fmtMs(Number(t[st.key]))) : 'not run'}</div>
+              </div>`;
+    }).join('');
+
+    const line = usedModel
+      ? `Escalated to <b class="model">${esc(deciding === 'T3' ? 'the vision model' : 'the text model')}</b> — the deterministic tiers could not resolve this one.`
+      : `<b>No model was called.</b> Resolved deterministically at ${esc(deciding || 'T1')} on CPU — no GPU, no tokens, nothing queued behind another request.`;
+
+    return `<div class="cascade">
+      <div class="cl">Cascade — where this decision was made</div>
+      <div class="stages">${cells}</div>
+      <div class="verdict-line">${line}</div>
+    </div>`;
+  }
+
+  // ------------------------------------------------------ image evidence (beat 3)
+  // Three fidelity levels, picked by what the verdict actually carries. The rule is
+  // that we never draw a box we were not given coordinates for: inventing a position
+  // for a marker would be fabricating evidence, which is precisely the failure this
+  // product exists to prevent.
+  //
+  //   evidence_boxes present  -> boxes drawn on the image at the model's coordinates
+  //   extracted_text present  -> the transcript, with the marker strings underlined
+  //   neither                 -> the image plus the marker strings as chips
+  function imageEvidenceHTML(v, ctx) {
+    const img = ctx && ctx.images && ctx.images[0];
+    if (!img || !img.b64) return '';
+
+    const spans = (v.evidence_spans || []).filter(Boolean);
+    const boxes = Array.isArray(v.evidence_boxes) ? v.evidence_boxes : null;
+    const ocr = Array.isArray(v.extracted_text) ? v.extracted_text.join('\n') : null;
+
+    // Coordinates are normalised 0..1 so they survive the client-side downscale to
+    // 1024px — the model saw the downscaled image, not the original.
+    const boxHTML = (boxes || []).map((b) => {
+      const x = Number(b.x), y = Number(b.y), w = Number(b.w), h = Number(b.h);
+      if (![x, y, w, h].every(Number.isFinite)) return '';
+      return `<div class="bbox" style="left:${(x * 100).toFixed(2)}%;top:${(y * 100).toFixed(2)}%;`
+           + `width:${(w * 100).toFixed(2)}%;height:${(h * 100).toFixed(2)}%">`
+           + `<span class="bl">${esc(b.text || '')}</span></div>`;
+    }).join('');
+
+    let body;
+    let note;
+    if (boxHTML) {
+      body = '';
+      note = `${boxes.length} marker${boxes.length === 1 ? '' : 's'} located on the image by the vision model.`;
+    } else if (ocr) {
+      const hl = highlight(ocr, spans);
+      body = `<div class="ocr">${hl.html}</div>`;
+      note = hl.hits
+        ? `Transcribed off the image by the vision model; ${hl.hits} marker${hl.hits === 1 ? '' : 's'} underlined in its own transcript. Positions are not shown because the model did not return coordinates.`
+        : 'Transcribed off the image by the vision model.';
+    } else {
+      body = spans.length
+        ? `<div class="chips">${spans.map((sp) => `<span class="chip-m">${esc(sp)}</span>`).join('')}</div>`
+        : '';
+      note = spans.length
+        ? 'Read off the image by the vision model. Positions are not shown because the model did not return coordinates.'
+        : '';
+    }
+
+    return `<div class="imgwrap">
+      <div class="imgshot"><img src="data:${esc(img.mime || 'image/jpeg')};base64,${img.b64}" alt="">${boxHTML}</div>
+      ${body}
+      ${note ? `<div class="imgnote">${esc(note)}</div>` : ''}
+    </div>`;
+  }
+
   const SHIELD = `<svg class="shield" viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <path d="M12 2.5 4.5 5.8v5.4c0 4.6 3.2 8.9 7.5 10.3 4.3-1.4 7.5-5.7 7.5-10.3V5.8L12 2.5Z"
           fill="rgba(248,113,113,.14)" stroke="#f87171" stroke-width="1.4" stroke-linejoin="round"/>
@@ -352,6 +515,8 @@
       ${v.policy_clause_id && v.policy_clause_id !== 'NONE' ? `
         <div class="clause"><span class="cid">${esc(v.policy_clause_id)}</span> — ${esc(v.policy_clause_text || '')}</div>` : ''}
 
+      ${v.modality === 'image' && !unavailable ? imageEvidenceHTML(v, ctx) : ''}
+
       ${ctxPayload && !unavailable ? `
         <div class="evi ${hl.hits ? '' : 'unverified'}">${hl.html || '<i>(empty payload)</i>'}</div>
         <div class="evi-note ${hl.hits ? '' : 'warn'}">
@@ -368,6 +533,8 @@
         <div><dt>Decided in</dt><dd>${esc(v.latency_ms != null ? v.latency_ms + ' ms' : '—')}</dd></div>
         <div><dt>Bytes egressed</dt><dd class="zero">${esc(v.bytes_egressed != null ? v.bytes_egressed : 0)}</dd></div>
       </dl>
+
+      ${cascadeHTML(v)}
 
       ${scoreDetailsHTML(v.score_details)}
 

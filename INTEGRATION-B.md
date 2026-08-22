@@ -110,8 +110,17 @@ a false claim on the one beat whose entire point is that the write-back is real.
 `POST /v1/inspect` with `4242424242424242` returns `503 airlock_unavailable` rather than a
 `PAYMENT_CARD` block. That is **correct**: it is Stripe's published test PAN and A's
 `t1.scan()` excludes it by design (SRS §6.2), so the payload escalates to T2, the
-classifier is not up, and the router fails closed. `4111111111111111` blocks at T1 with
-`confidence:"HIGH"` as specified. A's detector is behaving to spec — do not "fix" this.
+classifier is not up, and the router fails closed.
+
+> **Correction, added later — this paragraph was misread as a sign-off and it was not
+> one.** It originally ended by noting that `4111111111111111` blocks at T1 with
+> `confidence:"HIGH"` "as specified". That sentence existed only as the *contrast* that
+> proved the `4242…` exclusion was firing — it was a control in an experiment about
+> `4242…`, not a judgement about `4111…`. A read it as B having signed off on `4111…`
+> blocking and left the behaviour alone on that basis (`t1.py:53`, `NOTES.md:11`).
+>
+> **B does not rely on `4111111111111111` anywhere** — not in a demo payload, not in a
+> fixture, not in a test. It should be excluded. See §14.
 
 ---
 
@@ -319,6 +328,111 @@ restores the sixth source and the intended mix.
 `tools/stub_inspect.py` reported `airlock-clf/qwen3-4b` and `airlock-vision/holo1.5-7b`.
 The block card renders `model` verbatim on the receipt, so the stub was naming weights we
 do not have. Now `nemotron-3.5-lightning-30b` and `nemotron-3-nano-omni-30b`.
+
+---
+
+# Round 6 — answers to A's three questions
+
+## 14. `4111111111111111` — **exclude it.** B does not rely on it.
+
+Searched every B-owned file: `extension/**`, `web/**`, `tools/fixtures/**`,
+`tools/harness/**`, `tools/stub_inspect.py`, and the demo payloads. **No PAN appears in
+any of them at all.** The only occurrences of `4111111111111111` in the whole tree are
+`t1.py:53`, `NOTES.md:11` and one prose line in this file.
+
+**That prose line was misread as a sign-off, and the record is now corrected above.** It
+read "`4111111111111111` blocks at T1 with `confidence:"HIGH"` as specified" — but that
+sentence was the *control* in an experiment about `4242424242424242`. B was checking that
+the Stripe exclusion fired on `4242…`, and cited `4111…` blocking as the contrast that
+proved the exclusion was doing something. It was never a judgement that `4111…` *should*
+block, and `t1.py:53` should not be carrying B's name as the reason it still does.
+
+A's own reasoning is right and B agrees with all of it: it is the most widely published
+test card in existence, T1-HIGH means no model call can rescue it, and it lands straight
+in the reported FPR. A judge pasting it into an integration test is not an edge case,
+it is the first thing anyone would try.
+
+Checked before answering, so the exclusion cannot silently cost recall:
+`bench/build_sensitive.py` builds its PAYMENT_CARD carriers from its own
+`STRIPE_TEST_PANS` list, and `tests/test_t1.py:LIVE_SHAPED_PANS` uses `4556737586899855`
+and `5425233430109903` — deliberately not Stripe cards. Nothing anywhere depends on
+`4111…` blocking.
+
+**Go ahead with the one-line exclusion.**
+
+## 15. `tier_timings` — **yes. Already built against it; ship the field.**
+
+Renders as a five-cell cascade strip in the block card, above the `scoreDetails` tree.
+Verified in the harness at both `#cascade` and `#no-model`:
+
+```
+no model called:  CACHE 0.40ms[ran]  T0 0.01ms[ran]  T1 0.31ms[RESOLVED]  T2 not run  T3 not run
+                  "No model was called. Resolved deterministically at T1 on CPU —
+                   no GPU, no tokens, nothing queued behind another request."
+
+escalated:        CACHE 0.40ms[ran]  T0 0.01ms[ran]  T1 0.42ms[ran]  T2 312ms[MODEL]  T3 not run
+                  "Escalated to the text model — the deterministic tiers could not
+                   resolve this one."
+```
+
+A is right that this is the invisible claim. The stage that *did not run* is the whole
+argument, and a dimmed T2 next to a lit T1 makes it without anyone narrating it.
+
+Exactly the shape proposed — `{"cache":0.4,"T0":0.01,"T1":0.3,"T2":312}` — works as-is:
+
+- keys are matched case-sensitively against `cache`, `T0`, `T1`, `T2`, `T3`; anything
+  else is ignored rather than breaking the strip;
+- a key **present** means the stage ran, **absent** means it did not. Please omit skipped
+  stages rather than sending `0` or `null` — `"T2": 0` would light T2 up as having run in
+  no time, which is the opposite of the point;
+- the deciding stage is taken from the existing `tier` field, not inferred from the
+  timings, so `tier:"CACHE"` colours the cache cell green with no extra work;
+- milliseconds as floats. Sub-10ms renders to 2 decimals so `0.01` stays visible.
+
+**The renderer is already tolerant of the field being absent** — no cascade block is
+emitted at all, verified. So ship it whenever; nothing on B's side needs to land first.
+
+## 16. Image transcription overlay — **yes, and it is built. But boxes need coordinates.**
+
+This is the right instinct and it is the image analogue of the evidence underline. One
+hard constraint: **the T3 schema returns strings only.** `t3.py:33-47` requires
+`image_type`, `extracted_text`, `org_markers`, `temporal_markers`,
+`confidentiality_markers` — no coordinates anywhere. And `extracted_text` never reaches
+the client: `app.py:291-306` folds the markers into `reason` and `evidence_spans`, and
+`ocr_text` stays server-side.
+
+So "boxed where they appear" cannot be done truthfully today. B will not draw a box at a
+guessed position — inventing a location for a marker is fabricating evidence, which is
+the exact failure this product exists to prevent.
+
+Built instead: **one renderer, three fidelity levels, picked automatically by what the
+verdict carries.** All three verified in the harness (`#image`, `#image-ocr`, `#image-box`):
+
+| what the verdict carries | what renders | ask on A |
+|---|---|---|
+| today: `evidence_spans` only | the image, plus the marker strings as chips beneath it | nothing — **works now** |
+| `+ extracted_text` | the image, plus the model's own transcript with the markers underlined in it | **one field, cheap** |
+| `+ evidence_boxes` | red boxes drawn on the image at the model's coordinates, each labelled | schema change + a model that grounds |
+
+**The ask, ranked.** Level 2 is the high-value / low-cost one: add `extracted_text` to the
+verdict body for image modality. You already have it as `ocr_text`. That alone turns beat
+3 from *"the model thought it looked internal"* into *"here is what the model read off
+the chart, and here are the two phrases that made it a block"* — which is most of what A
+is after.
+
+Level 3 needs `evidence_boxes: [{text, x, y, w, h}]` with **x/y/w/h normalised 0–1**, not
+pixels — the client downscales to a 1024px long edge before sending, so the model sees a
+different pixel space than the overlay renders in. Normalised coordinates survive that;
+pixel coordinates would be silently wrong by the downscale ratio. Only worth attempting
+if Nemotron-Omni actually grounds text reliably; if it hallucinates positions, level 2 is
+strictly better than a confidently-wrong box.
+
+## Also fixed
+
+The harness was serving a stale cached `overlay.js` across reloads — `python -m
+http.server` sends `Last-Modified` and Chrome reuses it, which presents as "my change did
+nothing". The two files under active development are now loaded with a cache-busting
+query string.
 
 ---
 
