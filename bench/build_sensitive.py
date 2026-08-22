@@ -279,11 +279,33 @@ GENERATORS = [
 # --------------------------------------------------------------------------- hard negatives
 # THE most important bucket in this file. Every item is BENIGN and every item is
 # designed to trip a naive detector. Reported as its own line in the submission.
+# Stripe's published test PANs.
+#
+# THIS LIST IS DELIBERATELY MAINTAINED INDEPENDENTLY of the exclusion list in
+# services/inspect/tiers/t1.py, and it must stay that way. It is the test oracle: if the
+# corpus only ever used PANs the detector already excludes, the hard-negative bucket
+# could never catch a gap in that exclusion list — which is the single most likely way to
+# get a false positive on stage, because a judge asking about a test card is a completely
+# natural question.
+#
+# That independence has already paid for itself once: this bucket caught
+# 4000000000000077 auto-blocking at HIGH because t1.py's list was missing it.
+# See INTEGRATION.md §9.
+#
+# The union of both lists is used here so the corpus is as adversarial as possible.
 STRIPE_TEST_PANS = [
-    "4242424242424242", "4000056655665556", "5555555555554444", "2223003122003222",
-    "5200828282828210", "5105105105105100", "378282246310005", "371449635398431",
-    "6011111111111117", "6011000990139424", "3056930009020004", "3622720627891",
-    "4000000000000077", "4000000000000093",
+    # Visa
+    "4242424242424242", "4000056655665556", "4000000000000077", "4000000000000093",
+    # Mastercard
+    "5555555555554444", "5200828282828210", "5105105105105100", "2223003122003222",
+    # American Express
+    "378282246310005", "371449635398431",
+    # Discover
+    "6011111111111117", "6011000990139424",
+    # Diners Club
+    "3056930009020004", "3622720627891", "36227206271667",
+    # JCB / UnionPay
+    "3566002020360505", "6200000000000005",
 ]
 
 HARD_NEGATIVES = [
@@ -355,8 +377,17 @@ def build(seed: int, out_path: Path) -> int:
     # ---- HARD_NEGATIVE bucket — labelled BENIGN, reported as its own line ----
     hn = 0
     for name, template in HARD_NEGATIVES:
-        for _ in range(3):
-            text = template.replace("{pan}", rng.choice(STRIPE_TEST_PANS))
+        # The published-test-PAN trap gets ONE ITEM PER PAN, not three random draws.
+        # Sampling 3 of 17 made this test flaky: it caught t1.py's missing
+        # 4000000000000077 on one seed and missed it on the next. A test oracle that
+        # detects a gap only sometimes is worse than no oracle, because a green run
+        # gets believed. Every published PAN is now exercised on every build.
+        reps = (
+            [(p, template.replace("{pan}", p)) for p in STRIPE_TEST_PANS]
+            if "{pan}" in template
+            else [(None, template)] * 3
+        )
+        for pan, text in reps:
             records.append({
                 "_id": f"hardneg:{hn}",
                 "source": "hand-written hard negatives",
@@ -368,6 +399,7 @@ def build(seed: int, out_path: Path) -> int:
                 "expected_span": None,
                 "bucket": "HARD_NEGATIVE",
                 "trap": name,
+                "probe": pan,
                 "text": text,
                 "synthetic": True,
             })
