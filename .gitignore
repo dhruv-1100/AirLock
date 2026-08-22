@@ -1,3 +1,8 @@
+# local model weights, corpora dumps and wheels — 70 GB, pre-staged on the box.
+# Never committed: they are inputs to the run, not artifacts of it, and a single
+# safetensors shard is larger than GitHub's hard file limit.
+gb10/
+
 # macOS finder droppings — one got committed in 3aca041
 .DS_Store
 **/.DS_Store
