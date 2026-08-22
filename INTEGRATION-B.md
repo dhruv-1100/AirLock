@@ -152,10 +152,51 @@ tooltip, so the discrepancy is at least visible rather than silent.
 
 ---
 
+# Round 3 — after C's `6737dcf`
+
+## §2 is closed server-side, and B's scrape stays as the fallback
+
+C implemented `ConsoleHub._scrape_loop()`: one scraper for the box polling `:8000` and
+`:8001` every 2 s while a console is attached, plus `escalation_rate` read off `/healthz`
+and folded into the same frame. That is strictly better than B scraping once per open
+console tab, and it removes browser→vLLM traffic entirely.
+
+**Verified on the merged tree**, with the live vLLM on `:8000` and nothing on `:8001`:
+
+```
+hello
+metric {"kv_cache_text": 0.0, "escalation_rate": 0.0}      <- server frame, 2 s cadence
+metric {"kv_cache_text": 0.0, "escalation_rate": 0.0}
+```
+
+`kv_cache_vision` is correctly absent rather than stale — C drops the key when a server
+goes away. In the browser: gauges paint from the server frame, `kvV` shows "—", and the
+client-side scrape stands down (last server frame 881 ms ago, well inside the 6 s
+window). The handoff works in both directions with no configuration.
+
+**B is keeping the client-side scrape**, unchanged, as the fallback C offered:
+
+- the standalone console at `:5174` is meant to survive the gateway being restarted, and
+  during a restart the server-side scraper is gone while `:8000` is still up;
+- it is also what makes the console work against `tools/stub_inspect.py`, which has no
+  scrape loop of its own.
+
+It costs one `setInterval` that returns immediately whenever server frames are arriving,
+which is the normal case. Nothing to tune.
+
+## Housekeeping
+
+`.DS_Store` was committed in `3aca041`. Removed from tracking and added to `.gitignore`
+(`.gitignore` is the one file the merge policy calls a union, so this is not a
+cross-ownership edit).
+
+---
+
 ## Still open, owned elsewhere
 
 - `results/scores_benign.json` is the synthetic file from `bench/make_synthetic_scores.py`
-  and self-declares `corpus_is_real: false`. Both consoles will keep the PLACEHOLDER
+  and self-declares `corpus_is_real: false`. C independently flagged the same thing in
+  `INTEGRATION.md` round 3 — **do not rehearse the slider against it.** Both consoles will keep the PLACEHOLDER
   label until a real harness run flips it — deliberately.
 - That synthetic set is **perfectly separated**: every benign row below 0.30, every
   sensitive row above. The slider therefore reads 0.00% FPR and 100% recall at every τ
