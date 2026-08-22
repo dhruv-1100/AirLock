@@ -540,7 +540,8 @@
       <dl class="receipt">
         <div><dt>Classifier</dt><dd>${esc(v.model || '—')}</dd></div>
         <div><dt>Confidence</dt><dd>${p == null ? '—' : p.toFixed(2)}${v.threshold != null ? ` <span style="opacity:.5;font-weight:400">/ τ ${Number(v.threshold).toFixed(2)}</span>` : ''}</dd></div>
-        <div><dt>Decided in</dt><dd>${esc(v.latency_ms != null ? v.latency_ms + ' ms' : '—')}</dd></div>
+        <div><dt>Decided in</dt><dd>${v.latency_ms == null ? '—'
+          : (v.latency_ms === 0 ? '&lt;1 ms' : esc(v.latency_ms) + ' ms')}</dd></div>
         <div><dt>Bytes egressed</dt><dd class="zero">${esc(v.bytes_egressed != null ? v.bytes_egressed : 0)}</dd></div>
       </dl>
 

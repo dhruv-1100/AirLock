@@ -69,16 +69,28 @@
     });
   }
 
+  // An MV3 service worker is killed after ~30 s idle. The first paste after that has to
+  // wake it, and the wake occasionally loses the message — "Could not establish
+  // connection. Receiving end does not exist." Measured on the box: a paste into a page
+  // that had been sitting idle fail-closed in 0 ms with nothing reaching :8787, while the
+  // very next paste succeeded. One retry after a short pause turns that into a hiccup
+  // instead of a BLOCK card on the first paste of the demo.
   async function inspect(payload) {
     try {
       return await viaWorker('INSPECT', { payload });
-    } catch (e) {
-      log('service-worker route failed, falling back to direct fetch:', e.message);
-      return direct('/v1/inspect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    } catch (first) {
+      log('service-worker route failed, retrying once after wake:', first.message);
+      try {
+        await new Promise((r) => setTimeout(r, 250));
+        return await viaWorker('INSPECT', { payload });
+      } catch (e) {
+        log('service-worker route failed twice, falling back to direct fetch:', e.message);
+        return direct('/v1/inspect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
     }
   }
 
