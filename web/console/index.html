@@ -171,8 +171,32 @@ let total = 0, blocked = 0;
 
 const hhmmss = (ts) => new Date(ts || Date.now()).toTimeString().slice(0, 8);
 
-function addRow(d, prepend) {
-  if (!d || d.type !== 'decision') return;
+// Two shapes reach this function. The WebSocket sends normalised ConsoleHub frames;
+// GET /v1/decisions backfills raw Mongo documents ({verdict:'BLOCK', origin:'…'}, no
+// `type`). Dropping anything without type:'decision' would silently discard the whole
+// backfill and read as a dead feed.
+function normalise(d) {
+  if (!d || typeof d !== 'object') return null;
+  if (d.type && d.type !== 'decision') return null;
+  const origin = d.origin || '';
+  let ts = d.ts;
+  if (typeof ts === 'string') ts = Date.parse(ts) || Date.now();
+  return {
+    ts: ts || Date.now(),
+    host: d.host || (origin ? origin.split('//').pop().split('/')[0] : 'local'),
+    modality: d.modality || 'text',
+    chars: d.chars != null ? d.chars : 0,
+    action: String(d.action || d.verdict || 'allow').toLowerCase(),
+    label: d.label || 'BENIGN',
+    p_block: Number(d.p_block) || 0,
+    tier: d.tier || 'T1',
+    latency_ms: d.latency_ms != null ? d.latency_ms : null,
+  };
+}
+
+function addRow(raw) {
+  const d = normalise(raw);
+  if (!d) return;
   const empty = feed.querySelector('.empty');
   if (empty) empty.remove();
   const isBlock = d.action === 'block';
@@ -195,6 +219,32 @@ function addRow(d, prepend) {
 
 // ------------------------------------------------------------------ cached sweep
 let SCORES = null;
+
+// results/scores_benign.json has had three shapes today (INTEGRATION.md §3). Accept all
+// of them rather than making whoever copies the file learn which one this wants.
+// Rows with tier "ERR" are harness failures, not classifier scores — excluded from the
+// denominator and reported separately instead of being counted as false positives.
+function normaliseScores(raw) {
+  if (!raw) return null;
+  if (Array.isArray(raw)) raw = { items: raw };
+  let benign = raw.benign, sensitive = raw.sensitive, errors = 0;
+  if (!Array.isArray(benign) && Array.isArray(raw.items)) {
+    benign = []; sensitive = [];
+    for (const it of raw.items) {
+      if (!it || typeof it.p_block !== 'number') continue;
+      if (it.tier === 'ERR' || it.verdict_label === 'airlock_unavailable') { errors += 1; continue; }
+      (String(it.label).toUpperCase() === 'BENIGN' ? benign : sensitive).push(it.p_block);
+    }
+  }
+  if (!Array.isArray(benign)) return null;
+  return {
+    benign,
+    sensitive: Array.isArray(sensitive) ? sensitive : [],
+    errors,
+    corpusIsReal: raw.corpus_is_real !== false && !raw._placeholder,
+  };
+}
+
 function sweep(tau) {
   $('tauV').textContent = tau.toFixed(2);
   if (!SCORES) return;
@@ -212,23 +262,45 @@ $('mode').addEventListener('change', (e) => {
 });
 
 fetch('./scores_benign.json').then((r) => r.json()).then((j) => {
-  SCORES = j;
-  if (j._placeholder) {
+  SCORES = normaliseScores(j);
+  if (!SCORES) {
+    $('scoreNote').textContent = 'Scores file present but in an unrecognised shape — slider disabled.';
+    $('scoreNote').style.color = '#fcd34d';
+  } else if (!SCORES.corpusIsReal) {
     $('scoreNote').textContent =
       'PLACEHOLDER SCORES — shape only. Replace with results/scores_benign.json before showing a number.';
     $('scoreNote').style.color = '#fcd34d';
+  } else if (SCORES.errors) {
+    $('scoreNote').textContent =
+      `scores cached; threshold sweep is exact — ${SCORES.errors} harness errors excluded from the denominator`;
   }
   sweep(Number($('tau').value));
 }).catch(() => { $('scoreNote').textContent = 'No cached scores file found next to this page.'; });
 
 // ---------------------------------------------------------------------- health
+// /healthz reports whether the mongo module IMPORTED; /v1/decisions reports whether it
+// is CONNECTED. They disagree whenever the container is down, and connected is the
+// honest one. Held as a flag because health() reruns every 5 s and would overwrite any
+// note appended by the one-shot decisions fetch.
+let mongoConnected = null;
+
 async function health() {
   try {
     const h = await (await fetch(BASE + '/healthz', { cache: 'no-store' })).json();
+    if (mongoConnected !== null) h.mongo = mongoConnected;
     const allUp = h.ok && h.clf && h.vlm && h.mongo;
     $('led').className = 'led ' + (h.ok ? (allUp ? 'up' : 'amber') : 'down');
+    // The override count is worth showing: it is the span-verification fail-open, the
+    // one place the detector is allowed to let something through, and the SRS asks for
+    // it as a rate rather than a vibe.
+    const extra = [];
+    if (h.overrides != null) extra.push(`overrides ${h.overrides}`);
+    if (h.img_gate && h.img_gate.seen) {
+      extra.push(`img fast-pass ${Math.round(h.img_gate.fast_passed / h.img_gate.seen * 100)}%`);
+    }
     $('healthTxt').textContent =
       `clf ${h.clf ? '✓' : '✗'} · vlm ${h.vlm ? '✓' : '✗'} · mongo ${h.mongo ? '✓' : '✗'} · up ${h.uptime_s || 0}s`
+      + (extra.length ? ' · ' + extra.join(' · ') : '')
       + (h.stub ? ' · STUB' : '');
   } catch (_) {
     $('led').className = 'led down';
@@ -240,8 +312,53 @@ health(); setInterval(health, 5000);
 // ------------------------------------------------------- backfill, then tail
 fetch(BASE + '/v1/decisions?limit=50', { cache: 'no-store' })
   .then((r) => r.json())
-  .then((j) => (j.decisions || []).slice().reverse().forEach(addRow))
+  .then((j) => {
+    (j.decisions || []).slice().reverse().forEach(addRow);
+    // /v1/decisions knows whether Mongo is CONNECTED; /healthz only knows whether the
+    // module imported. When they disagree, the connected one is the honest one.
+    if (typeof j.mongo === 'boolean') { mongoConnected = j.mongo; health(); }
+  })
   .catch(() => {});
+
+// Nothing on the server currently calls ConsoleHub.set_metric(), so no {"type":"metric"}
+// frame ever arrives and both gauges would sit at "—" all day. Scrape the two vLLM
+// Prometheus endpoints instead — read-only GETs, loopback to loopback. If real server
+// metric frames start arriving we stand down within 6 s and let them win.
+// vLLM renamed the counter: newer builds expose kv_cache_usage_perc, older gpu_cache_usage_perc.
+const KV_RE = /^vllm:(?:kv|gpu)_cache_usage_perc\{[^}]*\}\s+([0-9.eE+-]+)/m;
+let lastServerMetricAt = 0;
+
+async function scrapeKV(port) {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/metrics`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const m = KV_RE.exec(await res.text());
+    return m && Number.isFinite(Number(m[1])) ? Number(m[1]) : null;
+  } catch (_) { return null; }
+}
+
+function paintKV(kv) {
+  if (typeof kv.kv_cache_text === 'number') {
+    $('kvT').textContent = (kv.kv_cache_text * 100).toFixed(1) + '%';
+    $('kvTf').style.width = Math.min(100, kv.kv_cache_text * 100) + '%';
+  }
+  if (typeof kv.kv_cache_vision === 'number') {
+    $('kvV').textContent = (kv.kv_cache_vision * 100).toFixed(1) + '%';
+    $('kvVf').style.width = Math.min(100, kv.kv_cache_vision * 100) + '%';
+  }
+  if (typeof kv.escalation_rate === 'number') {
+    $('esc').textContent = (kv.escalation_rate * 100).toFixed(0) + '%';
+  }
+}
+
+setInterval(async () => {
+  if (Date.now() - lastServerMetricAt < 6000) return;
+  const [t, v] = await Promise.all([scrapeKV(8000), scrapeKV(8001)]);
+  const kv = {};
+  if (t !== null) kv.kv_cache_text = t;
+  if (v !== null) kv.kv_cache_vision = v;
+  if (Object.keys(kv).length) paintKV(kv);
+}, 2000);
 
 let backoff = 250, sock = null;
 function connect() {
@@ -251,18 +368,8 @@ function connect() {
     let f; try { f = JSON.parse(ev.data); } catch (_) { return; }
     if (f.type === 'decision') addRow(f);
     else if (f.type === 'metric') {
-      const kv = f.kv || {};
-      if (typeof kv.kv_cache_text === 'number') {
-        $('kvT').textContent = (kv.kv_cache_text * 100).toFixed(1) + '%';
-        $('kvTf').style.width = Math.min(100, kv.kv_cache_text * 100) + '%';
-      }
-      if (typeof kv.kv_cache_vision === 'number') {
-        $('kvV').textContent = (kv.kv_cache_vision * 100).toFixed(1) + '%';
-        $('kvVf').style.width = Math.min(100, kv.kv_cache_vision * 100) + '%';
-      }
-      if (typeof kv.escalation_rate === 'number') {
-        $('esc').textContent = (kv.escalation_rate * 100).toFixed(0) + '%';
-      }
+      if (f.src !== 'scrape') lastServerMetricAt = Date.now();
+      paintKV(f.kv || {});
     }
   };
   sock.onclose = schedule;

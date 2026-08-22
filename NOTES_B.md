@@ -6,6 +6,16 @@ bare `python` that imports torch, MongoDB indexes, or the policy artifact (NFR-S
 
 Contract is `CONTRACT.md`, frozen. Everything below conforms to it.
 
+**Phase status.** Phases 0–3 of B's column are complete as code. What is *not* done is
+the part that needs the actual box and a human at the keyboard: the `chrome://version`
+check and G1-B load-unpacked (Phase 0 items 1, 7, 8), the final-quality screenshots for
+C (Phase 3 item 6 — states are pre-wired, see below), and Phases 4–5, which are dress
+runs and demo freeze rather than files.
+
+**Reconciled against `main`** — see `INTEGRATION-B.md` for the six client-side fixes
+found by running against A's real `services/inspect/app.py`, the worst of which was the
+console silently dropping its entire backfill.
+
 ---
 
 ## Run it
@@ -32,6 +42,25 @@ Load the extension: `chrome://extensions` → Developer mode → Load unpacked �
 `extension/`. Open the blue **service worker** link on the extension card and leave
 that DevTools window open all day. Content-script logs go to the *page* console; SW
 logs go to that one. Two consoles — this trips people up every single time.
+
+### Screenshots for the submission
+
+The capture states are pre-wired as URL hashes on the harness, so each shot is one URL
+and no clicking — framing is identical run to run:
+
+| URL | Shot |
+|---|---|
+| `…/tools/harness/#block` | block card, evidence span underlined |
+| `…/tools/harness/#evidence` | same with the `scoreDetails` tree expanded |
+| `…/tools/harness/#answer` | sanctioned answer streaming inside the card |
+| `…/tools/harness/#console` | console panel open, 40 decisions in the feed |
+| `…/tools/harness/#slider` | console open, threshold mid-drag at 0.42 |
+| `…/tools/harness/#unavailable` | the fail-closed card |
+
+Take these from the real Chrome you are demoing in — that is the honest source for a
+submission screenshot, and it costs about two minutes. **Do not ship the slider shot
+until `results/scores_benign.json` is a real run**; the console labels it PLACEHOLDER on
+purpose and that label is in the frame.
 
 ### Styling the overlay without reloading the extension
 
