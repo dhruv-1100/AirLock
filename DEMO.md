@@ -54,10 +54,19 @@ bash stack/run_inspect.sh       # must print CLF_URL=http://127.0.0.1:8000/v1
 4. Open `http://localhost:5173` and paste anything. You should see `[airlock] armed` in
    the page console and `[airlock] sw ping` round-trip.
 
-> **Not yet verified end to end in a real Chrome window.** The extension *loads* — the
-> service worker was confirmed running under headless with `--load-extension` — but
-> content-script injection could not be confirmed headless, which is a known weak spot
-> there. **Do step 4 first and confirm `airlock-root` exists** before relying on it:
+> **Still not verified end to end, and `--load-extension` will not do it for you.**
+> Chrome 151 does not load unpacked extensions from the command line — I confirmed this:
+> the only extension service worker present under `--load-extension` was
+> `fignfifoniblkonapihmkfakmlgkbkcf/service_worker.js`, which is Google's own **Network
+> Speech** component extension, not ours. Ours never appears in the registrar log at all.
+> **It must be loaded through the `chrome://extensions` UI** (steps 1-3 above), which is
+> the supported path and takes twenty seconds.
+>
+> What IS known good: `overlay.js` was injected manually into the replica page over CDP,
+> ran clean, and created `airlock-root` — so the overlay code itself is fine. What is
+> unproven is the manifest-driven injection and the paste interception.
+>
+> **Do step 4 first and confirm `airlock-root` exists** before relying on it:
 > ```js
 > // page console on localhost:5173
 > !!document.getElementById('airlock-root')   // must be true

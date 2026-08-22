@@ -9,15 +9,14 @@
     "declarativeNetRequest"
   ],
   "host_permissions": [
-    "http://127.0.0.1:8787/*",
-    "http://localhost:8787/*",
-    "http://127.0.0.1:8001/*",
     "http://127.0.0.1:8000/*",
-    "https://chatgpt.com/*",
+    "http://127.0.0.1:8001/*",
+    "http://127.0.0.1:8787/*",
+    "http://localhost/*",
     "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
     "https://claude.ai/*",
-    "https://gemini.google.com/*",
-    "http://localhost:5173/*"
+    "https://gemini.google.com/*"
   ],
   "background": {
     "service_worker": "sw.js",
@@ -26,11 +25,11 @@
   "content_scripts": [
     {
       "matches": [
-        "https://chatgpt.com/*",
+        "http://localhost/*",
         "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
         "https://claude.ai/*",
-        "https://gemini.google.com/*",
-        "http://localhost:5173/*"
+        "https://gemini.google.com/*"
       ],
       "js": [
         "overlay.js",
@@ -43,8 +42,8 @@
     },
     {
       "matches": [
-        "https://chatgpt.com/*",
-        "https://chat.openai.com/*"
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*"
       ],
       "js": [
         "mainworld.js"
@@ -63,11 +62,11 @@
         "scores_benign.json"
       ],
       "matches": [
-        "https://chatgpt.com/*",
+        "http://localhost/*",
         "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
         "https://claude.ai/*",
-        "https://gemini.google.com/*",
-        "http://localhost:5173/*"
+        "https://gemini.google.com/*"
       ]
     }
   ]
