@@ -39,11 +39,21 @@ DEFAULT_URL = "http://127.0.0.1:8787/v1/inspect"
 
 
 # --------------------------------------------------------------------------- io
+SMOKE = Path("data/smoke_20.jsonl")
+
+
 def load_corpus(path: Path, n: int | None) -> list[dict]:
     if not path.exists():
-        print(f"FATAL: corpus not found: {path}", file=sys.stderr)
-        print("  run: python bench/build_benign.py --seed 1337", file=sys.stderr)
-        sys.exit(2)
+        # A's fallback, kept: the harness is never blocked on the corpus. Proving the
+        # harness works on 20 pre-staged items at 13:00 beats waiting for 1000.
+        if SMOKE.exists():
+            print(f"! {path} not found — falling back to {SMOKE} (harness smoke test)")
+            print("  This is NOT a reportable run. Re-run when the real corpus lands.")
+            path = SMOKE
+        else:
+            print(f"FATAL: corpus not found: {path}", file=sys.stderr)
+            print("  run: python bench/build_benign.py --seed 1337", file=sys.stderr)
+            sys.exit(2)
     rows = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -257,11 +267,36 @@ async def main_async(a) -> int:
 
     wall = time.perf_counter() - t0
 
-    # ---- per-item scores. B's slider re-thresholds these CACHED scores: exact, instant,
-    # and honestly labelled as cached — never implying 1000 fresh inferences.
-    (results_dir / "scores_benign.json").write_text(json.dumps(brows, indent=1))
+    # ---- per-item scores ----
+    # SHAPE MATTERS. Three consumers, and they disagreed until this was reconciled:
+    #   · B's console.js does  SCORES.benign.filter(p => p >= tau)   -> needs {benign:[floats]}
+    #   · bench/report.py wants the rich per-item dicts               -> reads .items
+    #   · A's earlier harness wrote a bare list of dicts              -> would show "—" in B's slider
+    # Emitting one object that satisfies all three means neither A nor B changes anything.
+    def _plist(rows):
+        return [r["p_block"] for r in rows if r.get("p_block") is not None]
+
+    (results_dir / "scores_benign.json").write_text(
+        json.dumps(
+            {
+                "benign": _plist(brows),
+                "sensitive": _plist(srows),
+                "threshold_default": a.threshold,
+                "n": len(brows),
+                "corpus_is_real": corpus_real,
+                "_note": (
+                    "Cached per-item p_block. The threshold slider re-thresholds these "
+                    "scores — exact and instant. It is NOT 1000 fresh inferences."
+                ),
+                "items": brows,
+            },
+            indent=1,
+        )
+    )
     if srows:
-        (results_dir / "scores_sensitive.json").write_text(json.dumps(srows, indent=1))
+        (results_dir / "scores_sensitive.json").write_text(
+            json.dumps({"sensitive": _plist(srows), "items": srows}, indent=1)
+        )
 
     bsum = summarise(brows, a.threshold, is_benign=True)
     ssum = summarise(srows, a.threshold, is_benign=False) if srows else None
@@ -277,6 +312,53 @@ async def main_async(a) -> int:
         "sensitive": ssum,
     }
     (results_dir / "fpr_raw.json").write_text(json.dumps(report, indent=2))
+
+    # ---- results/report.json in A's exact shape ----
+    # A's app.py GET /v1/report reads this file from disk. Writing it here keeps that
+    # endpoint live without A changing a line. Note the `note` field: 0 FPs is reported
+    # as a rule-of-three bound, never as "zero".
+    from math import sqrt
+
+    def _wilson(k, nn, z=1.959963985):
+        if nn == 0:
+            return [0.0, 0.0]
+        p = k / nn
+        d = 1 + z * z / nn
+        c = (p + z * z / (2 * nn)) / d
+        h = z * sqrt(p * (1 - p) / nn + z * z / (4 * nn * nn)) / d
+        return [round(max(0.0, c - h), 6), round(min(1.0, c + h), 6)]
+
+    by_class: dict[str, int] = {}
+    for r in brows:
+        if r["verdict"] == "BLOCK":
+            k = r.get("predicted_label") or "UNKNOWN"
+            by_class[k] = by_class.get(k, 0) + 1
+
+    nb, fpc = bsum["n"], bsum["false_pos"]
+    (results_dir / "report.json").write_text(
+        json.dumps(
+            {
+                "n": nb,
+                "false_pos": fpc,
+                "fpr": round(fpc / nb, 6) if nb else None,
+                "ci95": _wilson(fpc, nb),
+                "p50_ms": bsum["p50_ms"],
+                "p95_ms": bsum["p95_ms"],
+                "by_class": by_class,
+                "threshold": a.threshold,
+                "seed": a.seed,
+                "corpus": Path(a.benign).name,
+                "wall_clock_s": round(wall, 1),
+                "corpus_is_real": corpus_real,
+                "note": (
+                    None
+                    if fpc
+                    else "0 FPs reported as 'below the rule-of-three bound', never 'zero'"
+                ),
+            },
+            indent=2,
+        )
+    )
 
     if not a.no_mongo:
         print("\nwriting benign_eval …")

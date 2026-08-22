@@ -6,6 +6,11 @@ Nobody waits on anybody because of a field name.
 
 Owners: **A** produces the verdict · **B** consumes it · **C** persists it.
 
+> **Reconciled with B's copy on `dev_B_RS`.** B and C independently wrote this file.
+> Every JSON field name, status code, timeout and frame type agrees between the two —
+> checked field-by-field, not eyeballed. This version is a superset: it adds the port
+> ownership table and the NFR-S1 reminder at the end. **Take this one at merge.**
+
 ---
 
 ## `POST /v1/inspect` — request (`airlock.inspect.v1`)

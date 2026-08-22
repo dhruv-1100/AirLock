@@ -113,9 +113,30 @@ def precision_at_prevalence(tpr: float, fpr: float, prevalence: float) -> float:
 
 # --------------------------------------------------------------------------- loading
 def load(path: Path) -> list[dict]:
+    """Read a scores file, tolerating every shape that has existed in this repo.
+
+    run_fpr.py now writes {benign:[floats], items:[dicts], …} so that B's slider
+    (which filters SCORES.benign) and this report (which needs the per-item dicts) can
+    read the same file. Older bare-list files still load.
+    """
     if not path.exists():
         return []
-    return json.loads(path.read_text())
+    data = json.loads(path.read_text())
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        if isinstance(data.get("items"), list):
+            return data["items"]
+        # A p_block-only file (B's bundled fixture): synthesise minimal rows so the
+        # report still runs, clearly marked so nothing is mistaken for a real item.
+        key = "sensitive" if "sensitive" in path.name else "benign"
+        floats = data.get(key) or data.get("benign") or []
+        return [
+            {"_id": f"{key}:{i}", "source": "scores-only", "label": "BENIGN",
+             "p_block": p, "verdict": "?", "latency_ms": 0, "tier": "?", "char_len": 0}
+            for i, p in enumerate(floats)
+        ]
+    return []
 
 
 def corpus_is_real() -> bool:

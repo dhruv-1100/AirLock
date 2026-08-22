@@ -140,55 +140,11 @@ CLASS_SEVERITY = {
 
 
 # --------------------------------------------------------------------------- embedder
-class Embedder:
-    """bge-small-en-v1.5 on CPU. Tries ONNX Runtime, then sentence-transformers, then
-    a deterministic hash fallback so the pipeline is always exercisable."""
-
-    def __init__(self) -> None:
-        self.backend = "hash"
-        self._st = None
-        try:
-            from sentence_transformers import SentenceTransformer  # type: ignore
-
-            self._st = SentenceTransformer(MODEL_ID, device="cpu")
-            self.backend = "sentence-transformers(cpu)"
-        except Exception:  # noqa: BLE001
-            try:
-                import onnxruntime  # noqa: F401  # type: ignore
-                from transformers import AutoTokenizer  # noqa: F401  # type: ignore
-
-                self.backend = "onnxruntime"  # wired on the box where the model is staged
-            except Exception:  # noqa: BLE001
-                pass
-        print(f"embedder backend: {self.backend}")
-        if self.backend == "hash":
-            print(
-                "  ! NO REAL EMBEDDING MODEL. Using a deterministic hash embedding so the\n"
-                "    retrieval path is exercisable. Semantic recall will be meaningless.\n"
-                "    Install: pip install sentence-transformers   (CPU only — NFR-S10)"
-            )
-
-    def encode(self, texts: list[str]) -> list[list[float]]:
-        if self._st is not None:
-            # normalize_embeddings=True because the index is cosine and MongoDB does not
-            # normalise for you.
-            return [
-                v.tolist()
-                for v in self._st.encode(texts, normalize_embeddings=True, batch_size=32)
-            ]
-        return [self._hash_embed(t) for t in texts]
-
-    @staticmethod
-    def _hash_embed(text: str) -> list[float]:
-        import hashlib
-        import math
-
-        vec = [0.0] * EMBED_DIM
-        for tok in text.lower().split():
-            h = int(hashlib.sha256(tok.encode()).hexdigest()[:16], 16)
-            vec[h % EMBED_DIM] += 1.0
-        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-        return [v / norm for v in vec]
+# Deliberately the SAME module mongo.write_back_corpus uses. If the corpus and the
+# write-back path ever embed with different models, an analyst override lands in the
+# wrong region of the space and demo beat 4 silently does nothing — the re-paste would
+# still block and it would look like the write-back failed. One embedder, one model.
+from services.inspect import embed as _embed  # noqa: E402
 
 
 # --------------------------------------------------------------------------- seeding
@@ -230,7 +186,6 @@ async def main_async(reset: bool) -> int:
         return 2
 
     coll = M._db["policy_corpus"]
-    emb = Embedder()
     now = datetime.now(timezone.utc)
 
     if reset:
@@ -244,7 +199,7 @@ async def main_async(reset: bool) -> int:
     # ---- nine clauses ----
     clauses = load_clauses()
     ctexts = [c["text"] for c in clauses]
-    for c, v in zip(clauses, emb.encode(ctexts)):
+    for c, v in zip(clauses, _embed.encode(ctexts)):
         docs.append({
             "kind": "clause", "clause_id": c["id"], "class": str(c["class"]).lower(),
             "tenant": M.TENANT, "modality": "text", "severity": c.get("severity", "MEDIUM"),
@@ -254,7 +209,7 @@ async def main_async(reset: bool) -> int:
 
     # ---- exemplars ----
     flat = [(cls, t) for cls, texts in EXEMPLARS.items() for t in texts]
-    for (cls, text), v in zip(flat, emb.encode([t for _, t in flat])):
+    for (cls, text), v in zip(flat, _embed.encode([t for _, t in flat])):
         docs.append({
             "kind": "exemplar", "clause_id": CLASS_TO_CLAUSE.get(cls, "NONE"),
             "class": cls, "tenant": M.TENANT, "modality": "text",
@@ -277,7 +232,7 @@ async def main_async(reset: bool) -> int:
 
     # ---- verify retrieval actually returns something ----
     print("\nverifying retrieval …")
-    qv = emb.encode(["our unreleased revenue forecast for next year"])[0]
+    qv = _embed.encode_one("our unreleased revenue forecast for next year")
     hits = await M.rank_fusion_clauses(qv, "unreleased revenue forecast", limit=3)
     if hits:
         print(f"  {len(hits)} hits — top class: {hits[0].get('class')} "

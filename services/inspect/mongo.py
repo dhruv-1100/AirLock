@@ -194,6 +194,20 @@ async def write_decision(verdict: dict, payload_sha256: str, **extra) -> str:
             # and its verdict could not be written in one operation.
             doc["evidence_png"], doc["evidence_nonce"] = Binary(enc[0]), Binary(enc[1])
 
+    # Encrypted payload text, capped. This exists for exactly one reason: /v1/feedback
+    # receives only a decision_id, so write_back_corpus must be able to recover the text
+    # it is embedding back into the corpus. Same AES-GCM key as the evidence crop, same
+    # 0600 key file. Capped at 8 KB because we are storing it to re-embed it, not to
+    # archive it — and a DLP product that hoards full copies of what it blocked has
+    # rebuilt the problem it was sold to solve.
+    ptext = extra.get("payload_text")
+    if ptext:
+        enc = encrypt_evidence(ptext[:8192].encode("utf-8", "replace"))
+        if enc:
+            from bson import Binary
+
+            doc["payload_enc"], doc["payload_enc_nonce"] = Binary(enc[0]), Binary(enc[1])
+
     try:
         res = await _coll("decisions").insert_one(doc)
         return str(res.inserted_id)
@@ -432,8 +446,24 @@ async def rank_fusion_clauses(
 
 
 # --------------------------------------------------------------------------- write-back
+def decrypt_evidence(ct: bytes, nonce: bytes) -> bytes | None:
+    key = _load_key()
+    if key is None:
+        return None
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        return AESGCM(key).decrypt(bytes(nonce), bytes(ct), None)
+    except Exception as e:  # noqa: BLE001
+        log.error("evidence decryption failed: %s", e)
+        return None
+
+
 async def write_back_corpus(
-    decision_id: str, payload: str, embedding: list[float], analyst: str = "demo"
+    decision_id: str,
+    payload: str | None = None,
+    embedding: list[float] | None = None,
+    analyst: str = "demo",
 ) -> str | None:
     """Procedural memory — demo beat 4.
 
@@ -441,9 +471,55 @@ async def write_back_corpus(
     back into policy_corpus; the next paste of that shape passes, while a near neighbour
     still blocks. **The detector learns without retraining a model.** Live, visible, and
     impossible with a regex.
+
+    `payload` and `embedding` are OPTIONAL and are resolved here when omitted, because
+    /v1/inspect's caller (A's app.py) has only a decision_id at feedback time and should
+    not need to know anything about embeddings. Called as
+    ``await write_back_corpus(decision_id)`` this reads the decision, decrypts its stored
+    payload, embeds it on CPU, and writes it back.
     """
     if not MONGO_ENABLED or _db is None:
         return None
+    try:
+        from bson import ObjectId
+
+        # ---- resolve the payload from the decision when not supplied ----
+        if payload is None:
+            try:
+                oid = ObjectId(decision_id)
+            except Exception:  # noqa: BLE001
+                log.error("write_back_corpus: %r is not an ObjectId", decision_id)
+                return None
+            dec = await _coll("decisions").find_one({"_id": oid})
+            if not dec:
+                log.error("write_back_corpus: decision %s not found", decision_id)
+                return None
+            if dec.get("payload_enc") and dec.get("payload_enc_nonce"):
+                pt = decrypt_evidence(dec["payload_enc"], dec["payload_enc_nonce"])
+                payload = pt.decode("utf-8", "replace") if pt else None
+            if not payload:
+                # Fall back to the verified evidence spans. Weaker — it embeds the
+                # offending fragment rather than the whole paste — but it is a real
+                # correction rather than a silent no-op, and the analyst sees an effect.
+                spans = dec.get("evidence_spans") or []
+                payload = " ".join(spans) if spans else None
+                if payload:
+                    log.warning(
+                        "write_back_corpus: no stored payload for %s — falling back to "
+                        "evidence spans", decision_id
+                    )
+            if not payload:
+                log.error("write_back_corpus: nothing to embed for %s", decision_id)
+                return None
+
+        if embedding is None:
+            from . import embed as _embed
+
+            embedding = _embed.encode_one(payload)
+    except Exception as e:  # noqa: BLE001
+        log.error("write_back_corpus resolve failed: %s", e)
+        return None
+
     try:
         res = await _coll("policy_corpus").insert_one(
             {
