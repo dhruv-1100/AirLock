@@ -19,13 +19,13 @@ import uuid
 
 import httpx
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import verify as verify_mod
 from .calib import p_block_from_logprobs
 from .schemas import (DEFAULT_MODE, LABEL_TO_CLAUSE, MODES, error_body,
                       verdict_body)
-from .tiers import t0, t1, t2, t3
+from .tiers import gate_img, t0, t1, t2, t3
 from .verify import verify
 
 MAX_BODY = 8 * 1024 * 1024
@@ -91,7 +91,9 @@ async def healthz():
         _probe(t3.VLM_BASE_URL.rsplit("/v1", 1)[0] + "/health"))
     return {"ok": True, "clf": clf, "vlm": vlm, "mongo": _HAVE_MONGO,
             "uptime_s": int(time.monotonic() - _started),
-            "overrides": verify_mod.override_count}
+            "overrides": verify_mod.override_count,
+            "img_gate": {"seen": gate_img.seen_count,
+                         "fast_passed": gate_img.fast_pass_count}}
 
 
 def _err(code, label, reason, request_id):
@@ -169,11 +171,56 @@ async def _route(req, rid):
                    latency_ms=int((time.monotonic() - t_start) * 1000))
         return JSONResponse(hit)
 
-    # ---- T3 — images: transcribe, then re-run T1+T2 on the OCR text -------
+    # ---- T3 — image path: cheap gate → VLM transcribe+classify → ground ---
     if images:
         im = images[0]
-        ocr = await t3.transcribe(im["b64"], im.get("mime", "image/jpeg"))
-        text = (text + "\n" + ocr).strip()
+        gate = gate_img.inspect_image(im["b64"])
+        if gate.fast_pass:
+            # One-sided: the gate may only fast-pass, never block.
+            return JSONResponse(_respond(
+                rid, action="allow", label="BENIGN", severity="NONE",
+                reason="Pre-VLM gate: natural image, no text-like structure",
+                spans=[], verified=True, p_block=0.0, threshold=threshold,
+                tier="T3", model="gate_img", modality="image", t_start=t_start))
+        verdict, model = await t3.classify_image(im["b64"],
+                                                 im.get("mime", "image/jpeg"))
+        verdict, ocr_text = t3.ground(verdict)
+        verdict = verify(verdict, ocr_text + "\n" + text)
+        # §6.4: re-run T1 on the OCR text — a screenshotted credential or PAN
+        # blocks deterministically even when the VLM classifies benign.
+        t1_ocr = t1.scan(ocr_text)
+        if verdict["label"] == "BENIGN" and t1_ocr.confidence == "HIGH":
+            body = _respond(
+                rid, action=block_action(), label=t1_ocr.label, severity="HIGH",
+                reason=f"Deterministic detector on transcription: {t1_ocr.detector}",
+                spans=t1_ocr.evidence_spans, verified=True, p_block=1.0,
+                threshold=threshold, tier="T3", model="airlock-vision+t1",
+                modality="image", t_start=t_start)
+            _cache[key] = body
+            return JSONResponse(body)
+        label = verdict["label"]
+        p_block = (float(verdict.get("confidence", 0.5))
+                   if label != "BENIGN" else 0.0)
+        blocked = label != "BENIGN" and p_block >= threshold
+        markers = (verdict.get("temporal_markers") or []) + \
+                  (verdict.get("confidentiality_markers") or [])
+        body = _respond(
+            rid,
+            action=(block_action() if blocked else "allow"),
+            label=label if blocked else "BENIGN",
+            severity=verdict.get("severity", "NONE") if blocked else "NONE",
+            reason=(f"{verdict.get('rationale', '')} Markers: "
+                    f"{', '.join(markers)}" if blocked
+                    else verdict.get("reason", verdict.get("rationale", ""))),
+            spans=verdict.get("evidence_spans", []) if blocked else [],
+            verified="override" not in verdict,
+            p_block=p_block, threshold=threshold, tier="T3",
+            model=f"airlock-vision/{model}", modality="image",
+            t_start=t_start,
+            clause_id=verdict.get("policy_clause_id") if blocked else "NONE")
+        if blocked:
+            _cache[key] = body
+        return JSONResponse(body)
 
     # ---- T0 — trivial gate ------------------------------------------------
     if modality == "text" and t0.is_trivial(text):
@@ -217,6 +264,70 @@ async def _route(req, rid):
     if blocked:
         _cache[key] = body
     return JSONResponse(body)
+
+
+TEXT_BASE_URL = os.environ.get("AIRLOCK_TEXT_URL", "http://127.0.0.1:8000/v1")
+TEXT_MODEL = os.environ.get("AIRLOCK_TEXT_MODEL", "Qwen/Qwen3.6-35B-A3B")
+REPORT_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
+                           "results", "report.json")
+
+
+@app.post("/v1/answer")
+async def answer(request: Request):
+    """Sanctioned path (SRS §5.2): the blocked question, re-answered by the
+    local model. SSE passthrough of :8000 in OpenAI chat delta shape."""
+    req = await request.json()
+    rid = "r_" + uuid.uuid4().hex[:6]
+    prompt = req.get("prompt")
+    if not prompt:
+        return _err(400, "bad_request", "Missing prompt", rid)
+
+    async def stream():
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=3)) as c:
+                async with c.stream(
+                        "POST", f"{TEXT_BASE_URL}/chat/completions",
+                        json={"model": TEXT_MODEL, "stream": True,
+                              "messages": [{"role": "user", "content": prompt}]},
+                ) as resp:
+                    resp.raise_for_status()
+                    async for chunk in resp.aiter_bytes():
+                        yield chunk
+        except httpx.HTTPError:
+            err = json.dumps(error_body(503, "answer_unavailable",
+                                        "Local model unreachable", rid))
+            yield f"data: {err}\n\ndata: [DONE]\n\n".encode()
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@app.post("/v1/feedback")
+async def feedback(request: Request):
+    """Analyst marks a decision benign → payload embedded back into
+    policy_corpus (procedural memory). Real write-back is C's
+    write_back_corpus(); a logged no-op until mongo.py lands."""
+    req = await request.json()
+    rid = "r_" + uuid.uuid4().hex[:6]
+    decision_id = req.get("decision_id")
+    if not decision_id:
+        return _err(400, "bad_request", "Missing decision_id", rid)
+    if _HAVE_MONGO and hasattr(mongo, "write_back_corpus"):
+        corpus_id = await mongo.write_back_corpus(decision_id)
+        return {"ok": True, "corpus_id": str(corpus_id), "embedded": True}
+    return {"ok": True, "corpus_id": f"stub_{decision_id[:8]}", "embedded": False}
+
+
+@app.get("/v1/report")
+async def report():
+    """FP-rate report (SRS §5.2) — served from bench/run_fpr.py output
+    (results/report.json); the benign_eval aggregation replaces this file
+    read when Mongo is up."""
+    try:
+        with open(REPORT_PATH) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return JSONResponse(status_code=404, content={
+            "error": "no_report", "reason": "bench/run_fpr.py has not run yet"})
 
 
 if __name__ == "__main__":

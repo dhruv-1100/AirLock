@@ -1,0 +1,19 @@
+{
+  "n": 20,
+  "false_pos": 20,
+  "fpr": 1.0,
+  "ci95": [
+    0.83887,
+    1.0
+  ],
+  "p50_ms": 39.2,
+  "p95_ms": 50.7,
+  "by_class": {
+    "airlock_unavailable": 20
+  },
+  "threshold": 0.55,
+  "seed": 1337,
+  "corpus": "smoke_20.jsonl",
+  "wall_clock_s": 0.1,
+  "note": null
+}

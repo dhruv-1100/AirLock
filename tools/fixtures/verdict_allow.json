@@ -1,0 +1,22 @@
+{
+  "schema": "airlock.verdict.v1",
+  "request_id": "r_2b81de",
+  "action": "allow",
+  "label": "BENIGN",
+  "severity": "NONE",
+  "policy_clause_id": "NONE",
+  "policy_clause_text": "",
+  "reason": "General programming question, no sensitive content",
+  "evidence_spans": [],
+  "evidence_verified": true,
+  "score": 0.02,
+  "p_block": 0.02,
+  "threshold": 0.55,
+  "tier": "T1",
+  "model": "none",
+  "modality": "text",
+  "latency_ms": 3,
+  "bytes_egressed": 0,
+  "decision_id": "6712c0f1a3e94b2d8c5e1103",
+  "score_details": null
+}
