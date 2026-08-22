@@ -14,3 +14,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# generated submission build
+submission/SUBMISSION.final.md
+results/fpr_report.json
+results/REPORT.md
+results/false_positives.md
+results/scores_*.json

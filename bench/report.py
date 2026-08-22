@@ -329,6 +329,23 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
             precision_at_prevalence(recall, 0.03, prevalence), 4
         )
 
+    # ---- the three named operating points, from the SAME cached scores ----
+    # This is exactly what caching per-item p_block buys: the sweep is exact and instant,
+    # not 3000 fresh inferences. Fills the Audit/Balanced/Strict table in the submission.
+    report["operating_points"] = {}
+    for name, tau in (("audit", 0.30), ("balanced", 0.55), ("strict", 0.20)):
+        b = sum(1 for r in bok if r["p_block"] >= tau)
+        s = sum(1 for r in sok if r["p_block"] >= tau)
+        lo_t, hi_t = wilson(b, len(bok))
+        report["operating_points"][name] = {
+            "threshold": tau,
+            "fpr": b / len(bok) if bok else None,
+            "fpr_ci95": [lo_t, hi_t],
+            "fpr_statement": fmt_rate(b, len(bok)),
+            "recall": s / len(sok) if sok else None,
+            "recall_statement": fmt_rate(s, len(sok)) if sok else None,
+        }
+
     (RESULTS / "fpr_report.json").write_text(json.dumps(report, indent=2))
 
     # ---- itemised false positives for hand-adjudication (SRS §14) ----
