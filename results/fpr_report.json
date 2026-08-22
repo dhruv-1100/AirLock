@@ -4,39 +4,44 @@
   "reportable": true,
   "threshold": 0.55,
   "n": 1000,
-  "false_pos": 68,
-  "fpr": 0.068,
+  "false_pos": 40,
+  "fpr": 0.04,
   "ci95": [
-    0.05399245780560125,
-    0.08531386152746426
+    0.029510973683353092,
+    0.05400964412500367
   ],
-  "fpr_statement": "6.80% [5.40%, 8.53%] (68/1000)",
+  "fpr_statement": "4.00% [2.95%, 5.40%] (40/1000)",
   "rule_of_three_upper": null,
-  "p50_ms": 2,
-  "p95_ms": 4,
-  "escalation_rate": 0.002,
+  "p50_ms": 5880,
+  "p95_ms": 8994,
+  "verdict_fp": 40,
+  "verdict_fpr": 0.04,
+  "verdict_fpr_statement": "4.00% [2.95%, 5.40%] (40/1000)",
+  "p_block_disagrees_with_verdict": 0,
+  "p_block_saturated_frac": 0.981,
+  "escalation_rate": 0.998,
   "tier_mix": {
-    "CACHE": {
+    "T2": {
       "n": 998,
       "pct": 99.8
     },
-    "T2": {
+    "ERR": {
       "n": 2,
       "pct": 0.2
     }
   },
-  "throughput_representative": true,
-  "throughput_caveat": null,
+  "throughput_representative": false,
+  "throughput_caveat": "Escalation is near-total because the benign corpus has a 200-character floor and the T0 fast path only fires below 40 characters. FPR is measured on the hard subset and is therefore conservative; escalation rate, blended latency and seats-per-box from this run are NOT representative of a real paste distribution and must be reported with this caveat.",
   "recall": 0.8777777777777778,
   "recall_statement": "87.78% [84.43%, 90.49%] (395/450)",
   "by_source": {
     "CFPB": {
       "n": 120,
-      "fp": 41,
-      "fpr": 0.3416666666666667,
+      "fp": 29,
+      "fpr": 0.24166666666666667,
       "ci95": [
-        0.26290438366878655,
-        0.43025168570160355
+        0.17385841216156306,
+        0.325501490495389
       ]
     },
     "HumanEval": {
@@ -77,31 +82,31 @@
     },
     "WildChat-1M": {
       "n": 400,
-      "fp": 27,
-      "fpr": 0.0675,
+      "fp": 11,
+      "fpr": 0.0275,
       "ci95": [
-        0.046801469159746235,
-        0.09642666544324532
+        0.015423636258249752,
+        0.048565481891839284
       ]
     }
   },
   "by_language": {
     "latin": {
       "n": 944,
-      "fp": 65,
-      "fpr": 0.06885593220338983,
+      "fp": 38,
+      "fpr": 0.04025423728813559,
       "ci95": [
-        0.05438907570448192,
-        0.08681751277790861
+        0.02946647311222058,
+        0.054768562271950184
       ]
     },
     "cjk": {
       "n": 35,
-      "fp": 3,
-      "fpr": 0.08571428571428572,
+      "fp": 2,
+      "fpr": 0.05714285714285714,
       "ci95": [
-        0.029582368260108474,
-        0.22379273970048336
+        0.015813161852865576,
+        0.18607057424293946
       ]
     },
     "cyrillic": {
@@ -126,20 +131,20 @@
   "by_class": {
     "BENIGN": {
       "n": 50,
-      "tp": 0,
-      "recall": 0.0,
+      "tp": 1,
+      "recall": 0.02,
       "ci95": [
-        0.0,
-        0.0713475991644559
+        0.003539259270481737,
+        0.10495443592739594
       ]
     },
     "CREDENTIAL": {
       "n": 70,
-      "tp": 70,
-      "recall": 1.0,
+      "tp": 69,
+      "recall": 0.9857142857142858,
       "ci95": [
-        0.9479769375665866,
-        0.9999999999999999
+        0.9234181286646008,
+        0.9974737535429403
       ]
     },
     "CUSTOMER_RECORD": {
@@ -206,44 +211,44 @@
       ]
     }
   },
-  "ece": 0.08446165517241382,
+  "ece": 0.06647062068965516,
   "precision_at_prevalence": {
-    "0.005": 0.0609,
-    "0.020": 0.2085,
-    "0.050": 0.4045
+    "0.005": 0.0993,
+    "0.020": 0.3093,
+    "0.050": 0.536
   },
   "precision_if_fpr_were_3pct": 0.3739,
   "operating_points": {
     "audit": {
       "threshold": 0.3,
-      "fpr": 0.069,
+      "fpr": 0.046,
       "fpr_ci95": [
-        0.05488394558295656,
-        0.08641472023313426
+        0.034662492760966765,
+        0.06081220394554186
       ],
-      "fpr_statement": "6.90% [5.49%, 8.64%] (69/1000)",
+      "fpr_statement": "4.60% [3.47%, 6.08%] (46/1000)",
       "recall": 0.8777777777777778,
       "recall_statement": "87.78% [84.43%, 90.49%] (395/450)"
     },
     "balanced": {
       "threshold": 0.55,
-      "fpr": 0.068,
+      "fpr": 0.04,
       "fpr_ci95": [
-        0.05399245780560125,
-        0.08531386152746426
+        0.029510973683353092,
+        0.05400964412500367
       ],
-      "fpr_statement": "6.80% [5.40%, 8.53%] (68/1000)",
+      "fpr_statement": "4.00% [2.95%, 5.40%] (40/1000)",
       "recall": 0.8777777777777778,
       "recall_statement": "87.78% [84.43%, 90.49%] (395/450)"
     },
     "strict": {
       "threshold": 0.2,
-      "fpr": 0.07,
+      "fpr": 0.047,
       "fpr_ci95": [
-        0.055776364143313745,
-        0.08751464815580237
+        0.0355271051040545,
+        0.061939938085479436
       ],
-      "fpr_statement": "7.00% [5.58%, 8.75%] (70/1000)",
+      "fpr_statement": "4.70% [3.55%, 6.19%] (47/1000)",
       "recall": 0.8777777777777778,
       "recall_statement": "87.78% [84.43%, 90.49%] (395/450)"
     }

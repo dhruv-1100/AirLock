@@ -1,26 +1,27 @@
 {
   "n": 1000,
-  "false_pos": 52,
-  "fpr": 0.052,
+  "false_pos": 40,
+  "fpr": 0.04,
   "ci95": [
-    0.039873,
-    0.067556
+    0.029511,
+    0.05401
   ],
-  "p50_ms": 2,
-  "p95_ms": 4,
+  "p50_ms": 5880,
+  "p95_ms": 8994,
   "by_class": {
-    "HEALTH_RECORD": 6,
-    "PROPRIETARY_CODE": 4,
-    "LEGAL_HR": 18,
-    "FINANCIAL_NONPUBLIC": 5,
-    "PAYMENT_CARD": 7,
-    "GOV_ID": 10,
+    "HEALTH_RECORD": 4,
+    "PROPRIETARY_CODE": 5,
+    "LEGAL_HR": 13,
+    "PAYMENT_CARD": 8,
+    "GOV_ID": 5,
+    "airlock_unavailable": 2,
+    "FINANCIAL_NONPUBLIC": 1,
     "CREDENTIAL": 2
   },
   "threshold": 0.55,
   "seed": 1337,
   "corpus": "benign_v1.jsonl",
-  "wall_clock_s": 344.7,
+  "wall_clock_s": 1131.8,
   "corpus_is_real": true,
   "note": null
 }
