@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Archivo, "Helvetica Neue", sans-serif; }
+    a { color: #EE8055; } a:hover { color: #F6A483; }
+  </style>
+</helmet>
+
+<div style="width: 1600px; height: 900px; background: #0A0C0F; color: #EDF1F6; padding: 72px 96px; box-sizing: border-box; display: flex; flex-direction: column; gap: 40px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.2em; text-transform: uppercase; color: #63707E;">The cascade</span>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #2A333F;">02</span>
+  </div>
+
+  <h2 style="margin: 0; font-size: 56px; line-height: 1.05; font-weight: 800; letter-spacing: -0.028em; max-width: 1100px;">
+    Most pastes never reach a model.
+  </h2>
+
+  <div style="display: flex; align-items: stretch; gap: 0; margin-top: 8px;">
+
+    <div style="display: flex; flex-direction: column; gap: 10px; padding: 24px 26px; background: #131820; border: 1px solid #2A333F; border-radius: 4px; min-width: 168px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700;">CACHE</span>
+      <span style="font-size: 17px; color: #9AA7B4; line-height: 1.35;">seen before</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #00B99A; margin-top: auto;">~1 ms</span>
+    </div>
+
+    <div style="display: flex; align-items: center; padding: 0 10px;">
+      <div style="width: 34px; height: 8px; background: #00B99A; border-radius: 1px;"></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; padding: 24px 26px; background: #131820; border: 1px solid #2A333F; border-radius: 4px; min-width: 168px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700;">T0</span>
+      <span style="font-size: 17px; color: #9AA7B4; line-height: 1.35;">trivial gate</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #00B99A; margin-top: auto;">0.01 ms</span>
+    </div>
+
+    <div style="display: flex; align-items: center; padding: 0 10px;">
+      <div style="width: 34px; height: 8px; background: #00B99A; border-radius: 1px;"></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; padding: 24px 26px; background: #131820; border: 1px solid #2A333F; border-radius: 4px; min-width: 232px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700;">T1</span>
+      <span style="font-size: 17px; color: #9AA7B4; line-height: 1.35;">regex &middot; Luhn &middot; entropy</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #00B99A; margin-top: auto;">0.3 ms</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 12px; gap: 8px;">
+      <div style="width: 44px; height: 2px; background: #63707E; border-radius: 1px;"></div>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #63707E; white-space: nowrap;">14%</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; padding: 24px 26px; background: #1B222C; border: 1px solid #EE8055; border-radius: 4px; min-width: 250px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: #EE8055;">T2 / T3</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #EE8055; border: 1px solid #EE8055; border-radius: 2px; padding: 2px 7px;">GPU</span>
+      </div>
+      <span style="font-size: 17px; color: #9AA7B4; line-height: 1.35;">local LLM &middot; vision</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #EE8055; margin-top: auto;">300&ndash;900 ms</span>
+    </div>
+
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 20px; padding: 20px 26px; background: rgba(0,185,154,0.07); border-left: 3px solid #00B99A; border-radius: 3px;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 34px; font-weight: 700; color: #00B99A;">86%</span>
+    <span style="font-size: 23px; line-height: 1.35; color: #EDF1F6;">resolved deterministically on CPU &mdash; no model call, no GPU, no wait.</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: auto; padding-top: 28px; border-top: 1px solid #2A333F;">
+    <div style="display: flex; flex-direction: column; gap: 7px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; color: #63707E;">Router, not AND-cascade</span>
+      <span style="font-size: 18px; line-height: 1.4; color: #9AA7B4;">An AND-cascade caps recall at T1's &mdash; near zero for financial text.</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 7px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; color: #63707E;">Span verification</span>
+      <span style="font-size: 18px; line-height: 1.4; color: #9AA7B4;">The model must quote the exact characters, or it is overruled.</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 7px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; color: #63707E;">Fail closed</span>
+      <span style="font-size: 18px; line-height: 1.4; color: #9AA7B4;">Any error, timeout or dead model returns a block, never an allow.</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Archivo, "Helvetica Neue", sans-serif; }
+    a { color: #EE8055; } a:hover { color: #F6A483; }
+  </style>
+</helmet>
+
+<div style="width: 1600px; height: 900px; background: #0A0C0F; color: #EDF1F6; padding: 72px 96px; box-sizing: border-box; display: flex; flex-direction: column; gap: 36px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.2em; text-transform: uppercase; color: #63707E;">The deciding number</span>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #2A333F;">03</span>
+  </div>
+
+  <div style="display: flex; align-items: flex-start; gap: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 152px; font-weight: 700; line-height: 0.86; letter-spacing: -0.04em; color: #00B99A;">[FPR]%</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 21px; color: #9AA7B4;">95% CI [ [LO] , [HI] ]</span>
+      <span style="font-size: 20px; color: #63707E; line-height: 1.4;">Wilson interval &middot; n = 1000 benign pastes</span>
+    </div>
+    <div style="flex-grow: 1; padding-left: 72px; border-left: 1px solid #2A333F; display: flex; flex-direction: column; gap: 24px;">
+      <p style="margin: 0; font-size: 34px; line-height: 1.32; font-weight: 500; text-wrap: pretty;">
+        A DLP control lives or dies on how often it is wrong about ordinary work.
+      </p>
+      <p style="margin: 0; font-size: 22px; line-height: 1.5; color: #9AA7B4; text-wrap: pretty;">
+        Measured against a public benign corpus with a stated denominator, a confidence interval, and every false positive hand-adjudicated. Reproduce it with one seeded command.
+      </p>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #EDF1F6; background: #131820; border: 1px solid #2A333F; border-radius: 4px; padding: 18px 22px;">
+        python bench/run_fpr.py --seed 1337 --n 1000 --threshold 0.55
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 8px;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: #63707E;">Ablation &mdash; each row a real run</span>
+    <div style="border: 1px solid #2A333F; border-radius: 4px; overflow: hidden;">
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; background: #1B222C; padding: 14px 24px;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #9AA7B4;">Config</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #9AA7B4;">FPR</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #9AA7B4;">95% CI</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #9AA7B4;">Recall</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #9AA7B4;">p95</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #9AA7B4;">&rarr; LLM</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 15px 24px; border-top: 1px solid #2A333F;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #9AA7B4;">T1 only</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #9AA7B4;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">0%</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 15px 24px; border-top: 1px solid #2A333F;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #9AA7B4;">T2, no verify</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #9AA7B4;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">100%</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 15px 24px; border-top: 1px solid #2A333F; background: rgba(0,185,154,0.07);">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #00B99A;">T2 + verify</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #00B99A;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #00B99A;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #00B99A;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #00B99A;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #00B99A;">100%</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 15px 24px; border-top: 1px solid #2A333F;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #9AA7B4;">Full router</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #9AA7B4;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">[__]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">14%</span>
+      </div>
+    </div>
+    <span style="font-size: 17px; color: #63707E; line-height: 1.4;">Row 3 minus row 2 is what span verification is worth. If FPR reads 0, state it as &ldquo;below 0.3% by the rule of three&rdquo; &mdash; never &ldquo;zero&rdquo;.</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

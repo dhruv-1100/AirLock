@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Archivo, "Helvetica Neue", sans-serif; }
+    a { color: #EE8055; } a:hover { color: #F6A483; }
+  </style>
+</helmet>
+
+<div style="width: 1600px; height: 900px; background: #0A0C0F; color: #EDF1F6; padding: 72px 96px; box-sizing: border-box; display: flex; flex-direction: column; gap: 34px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #2A333F; padding-bottom: 20px;">
+    <h2 style="margin: 0; font-size: 40px; font-weight: 700; letter-spacing: -0.02em;">Design system</h2>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #63707E;">1600 &times; 900 &middot; scale &times;1.2 for 1080p</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 48px; flex-grow: 1;">
+
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: #63707E;">Ground &amp; ink</span>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="width: 56px; height: 40px; background: #0A0C0F; border: 1px solid #2A333F; border-radius: 3px;"></div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px;">#0A0C0F</span>
+            <span style="font-size: 15px; color: #63707E;">ground</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="width: 56px; height: 40px; background: #131820; border: 1px solid #2A333F; border-radius: 3px;"></div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px;">#131820</span>
+            <span style="font-size: 15px; color: #63707E;">surface</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="width: 56px; height: 40px; background: #2A333F; border-radius: 3px;"></div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px;">#2A333F</span>
+            <span style="font-size: 15px; color: #63707E;">line</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="width: 56px; height: 40px; background: #EDF1F6; border-radius: 3px;"></div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px;">#EDF1F6</span>
+            <span style="font-size: 15px; color: #63707E;">ink</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="width: 56px; height: 40px; background: #9AA7B4; border-radius: 3px;"></div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px;">#9AA7B4</span>
+            <span style="font-size: 15px; color: #63707E;">ink-dim</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: #63707E;">Signal &mdash; two hues, one chroma</span>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="width: 56px; height: 40px; background: #EE8055; border-radius: 3px;"></div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px;">#EE8055</span>
+            <span style="font-size: 15px; color: #63707E;">block &middot; oklch(.72 .15 40)</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="width: 56px; height: 40px; background: #00B99A; border-radius: 3px;"></div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px;">#00B99A</span>
+            <span style="font-size: 15px; color: #63707E;">allow &middot; oklch(.72 .15 165)</span>
+          </div>
+        </div>
+      </div>
+      <p style="margin: 4px 0 0; font-size: 16px; line-height: 1.5; color: #9AA7B4;">
+        Signal colour carries meaning only &mdash; block or allow. Never decoration, never a third hue. Both survive grayscale by lightness alone.
+      </p>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: #63707E; margin-top: 8px;">Grid</span>
+      <div style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px;">
+        <div style="height: 46px; background: #1B222C;"></div><div style="height: 46px; background: #1B222C;"></div>
+        <div style="height: 46px; background: #1B222C;"></div><div style="height: 46px; background: #1B222C;"></div>
+        <div style="height: 46px; background: #1B222C;"></div><div style="height: 46px; background: #1B222C;"></div>
+        <div style="height: 46px; background: #1B222C;"></div><div style="height: 46px; background: #1B222C;"></div>
+        <div style="height: 46px; background: #1B222C;"></div><div style="height: 46px; background: #1B222C;"></div>
+        <div style="height: 46px; background: #1B222C;"></div><div style="height: 46px; background: #1B222C;"></div>
+      </div>
+      <span style="font-size: 15px; color: #63707E;">12 columns &middot; 96px margin &middot; 32px gutter</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 18px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: #63707E;">Type &mdash; Archivo + JetBrains Mono</span>
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: baseline; gap: 16px;">
+          <span style="font-size: 52px; font-weight: 800; letter-spacing: -0.03em; line-height: 1;">Display</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #63707E;">104/800</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 16px;">
+          <span style="font-size: 36px; font-weight: 700; letter-spacing: -0.02em; line-height: 1;">Heading</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #63707E;">40/700</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 16px;">
+          <span style="font-size: 26px; font-weight: 400; color: #9AA7B4; line-height: 1;">Lead paragraph</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #63707E;">29/400</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 16px;">
+          <span style="font-size: 22px; font-weight: 400; line-height: 1;">Body copy</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #63707E;">22/400 &middot; floor</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 16px;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 16px; letter-spacing: 0.16em; text-transform: uppercase; color: #63707E;">Label / data</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #63707E;">mono</span>
+        </div>
+      </div>
+      <p style="margin: 8px 0 0; font-size: 16px; line-height: 1.5; color: #9AA7B4;">
+        Mono is reserved for anything measured &mdash; latencies, verdicts, evidence, clause ids. If it came from a machine, it is set in mono.
+      </p>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

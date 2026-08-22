@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Archivo, "Helvetica Neue", sans-serif; }
+    a { color: #EE8055; } a:hover { color: #F6A483; }
+  </style>
+</helmet>
+
+<div style="width: 1600px; height: 900px; background: #0A0C0F; color: #EDF1F6; display: flex; flex-direction: column; justify-content: space-between; padding: 96px; box-sizing: border-box; position: relative; overflow: hidden;">
+
+  <div style="position: absolute; top: 0; right: 0; width: 760px; height: 900px; background: radial-gradient(circle at 78% 34%, rgba(238,128,85,0.16), rgba(10,12,15,0) 62%);"></div>
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; position: relative;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#EE8055" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="10.5" width="16" height="10" rx="2"></rect>
+        <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"></path>
+      </svg>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: #9AA7B4;">Airlock</span>
+    </div>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.14em; color: #63707E;">DELL &times; NVIDIA GB10</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 34px; position: relative; max-width: 1180px;">
+    <h1 style="margin: 0; font-size: 104px; line-height: 0.94; font-weight: 800; letter-spacing: -0.035em; text-wrap: balance;">
+      Company data stops<br>at the clipboard.
+    </h1>
+    <p style="margin: 0; font-size: 29px; line-height: 1.42; font-weight: 400; color: #9AA7B4; max-width: 880px; text-wrap: pretty;">
+      Airlock inspects a paste locally before it reaches an external AI tool, blocks it with a cited policy clause, and answers the question on the box instead.
+    </p>
+  </div>
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; position: relative;">
+    <div style="display: flex; gap: 56px;">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 40px; font-weight: 700; color: #00B99A;">[FPR]</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: #63707E;">False positives / 1000</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 40px; font-weight: 700; color: #EDF1F6;">0</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: #63707E;">Bytes egressed</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 40px; font-weight: 700; color: #EDF1F6;">3</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: #63707E;">Models, one box</span>
+      </div>
+    </div>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #63707E;">[TEAM] &middot; [DATE]</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

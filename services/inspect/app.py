@@ -13,6 +13,7 @@ import base64
 import binascii
 import hashlib
 import json
+import logging
 import os
 import time
 import uuid
@@ -22,7 +23,9 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import verify as verify_mod
-from .calib import label_logits_from_logprobs, p_block_from_logprobs
+from . import calib as calib_mod
+from .calib import (label_logits_from_logprobs,
+                    p_block_from_logprobs)
 from .schemas import (DEFAULT_MODE, LABEL_TO_CLAUSE, MODES, error_body,
                       verdict_body)
 from .tiers import gate_img, t0, t1, t2, t3
@@ -54,6 +57,8 @@ try:
     _HAVE_MONGO = True
 except ImportError:
     _HAVE_MONGO = False
+
+log = logging.getLogger("airlock")
 
 app = FastAPI(title="airlock inspect-svc")
 
@@ -147,6 +152,8 @@ async def healthz():
             "mongo": (await mongo.healthy()) if _HAVE_MONGO else False,
             "uptime_s": int(time.monotonic() - _started),
             "overrides": verify_mod.override_count,
+            "p_block_source": {"logprobs": calib_mod.logprob_count,
+                               "verbalized": calib_mod.fallback_count},
             "img_gate": {"seen": gate_img.seen_count,
                          "fast_passed": gate_img.fast_pass_count},
             "tiers": dict(_tier_counts),
@@ -197,6 +204,10 @@ async def inspect(request: Request):
             return _err(504, "airlock_timeout",
                         "Upstream classifier exceeded budget — deny by default", rid)
         except Exception:
+            # Fail closed to the client, but never silently to us: without the
+            # traceback a bug in the router is indistinguishable from a model
+            # server being down, and both present as a wall of BLOCKs.
+            log.exception("router failed for %s — failing closed", rid)
             _tier_counts["ERR"] = _tier_counts.get("ERR", 0) + 1
             return _err(503, "airlock_unavailable",
                         "Inspector unreachable — deny by default", rid)
@@ -365,6 +376,8 @@ async def _route(req, rid):
         label = verdict["label"]
         p_block = (float(verdict.get("confidence", 0.5))
                    if label != "BENIGN" else 0.0)
+        if "override" in verdict:
+            p_block = 0.0   # grounding overruled the model — see the T2 note
         blocked = label != "BENIGN" and p_block >= threshold
         markers = (verdict.get("temporal_markers") or []) + \
                   (verdict.get("confidentiality_markers") or [])
@@ -425,9 +438,26 @@ async def _route(req, rid):
         verdict, logprobs, model = await t2.classify(text, hints=scan.hints or None)
     if ABLATION != "t2_noverify":  # row 2 measures the cost of skipping this
         verdict = verify(verdict, text)
-    p_block = p_block_from_logprobs(logprobs, verdict)
+    p_block, p_source = p_block_from_logprobs(logprobs, verdict)
     label = verdict["label"]
+    p_block_model = p_block
+    if "override" in verdict:
+        # Span verification overruled the model, so the DECISION is BENIGN —
+        # and p_block must say so. B's threshold slider re-thresholds these
+        # cached scores to draw the FPR/recall curve; if p_block kept the
+        # model's pre-override opinion, an overridden item would count as a
+        # block at every tau below it and the published curve would disagree
+        # with the verdicts the service actually returned. The model's raw
+        # score is kept separately for the override-rate analysis.
+        p_block = 0.0
     blocked = label != "BENIGN" and p_block >= threshold
+    if not blocked and p_block >= threshold:
+        # INTEGRATION.md §11: the router allowed it, so the score must say
+        # allow too. Otherwise one run yields two different FP counts —
+        # verdict==BLOCK and p_block>=tau disagree — and B's slider, which
+        # re-thresholds these cached scores, draws a curve the service never
+        # produced. The verdict is ground truth; the raw score is kept.
+        p_block = 0.0
 
     body = _respond(
         rid,
@@ -442,6 +472,13 @@ async def _route(req, rid):
         model=f"airlock-clf/{model}", modality=modality, t_start=t_start,
         clause_id=verdict.get("policy_clause_id") if blocked else "NONE",
         stages=stages)
+    body["p_block_source"] = p_source
+    if p_source == "verbalized" or p_block != p_block_model:
+        # Verbalized confidence is bimodal and is NOT a calibrated posterior —
+        # anything downstream that averages or bins p_block needs to know.
+        body["p_block_model"] = round(p_block_model, 4)
+    if "override" in verdict:
+        body["override"] = verdict["override"]
     if req.get("debug_label_logits"):
         # Harness-only (bench/fit_calibration.py): raw label logits so the
         # temperature sweep is offline. Never set by the extension.
