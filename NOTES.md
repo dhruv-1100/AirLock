@@ -2,6 +2,33 @@
 
 ## A → team
 
+- **INTEGRATION.md §9 fixed (C's find, thank you):** `STRIPE_TEST_PANS` was
+  missing `4000000000000077` and `...93`. Widened to 26 published cards
+  (all Luhn-checked), and `tests/test_t1.py` now probes **every** entry plus
+  cross-checks C's independent corpus list — no sampling, so this class of gap
+  cannot recur silently. Verified: `bench/t1_offline.py` → **0/1000 T1-HIGH
+  false positives** on the real benign corpus, 8.1% MEDIUM escalation.
+- **`4111111111111111` now excluded** — B confirmed nothing depends on it
+  blocking (no PAN appears in any B-owned file) and corrected the record: the
+  INTEGRATION-B line was an experimental control, not a judgement. Verified
+  live: it escalates to T2 instead of auto-blocking at T1-HIGH.
+- **`tier_timings` shipped** in the verdict body, exactly the requested shape.
+  Skipped stages are **absent**, never 0/null. Verified:
+  `T0 → {CACHE:0.04, T0:0.01}` · `T1 → {CACHE, T0, T1}` · `CACHE replay →
+  {CACHE}`. **One rendering note for B:** a stage that ran in under 10 µs
+  serialises as `0.0` (it *did* run — presence means ran). Suggest rendering
+  sub-0.01 as `<0.01 ms` rather than `0` so it doesn't read as skipped.
+- **`extracted_text` shipped** on image verdicts (level 2 of B's ladder) — the
+  VLM's verbatim transcript now reaches the client instead of staying
+  server-side. **No `evidence_boxes`:** the T3 schema has no coordinates and I
+  agree with B — a confidently-wrong box is fabricated evidence, which is the
+  exact failure this product exists to prevent. If we ever add them they will
+  be normalised 0–1 per B's note (the client downscales to 1024px, so pixel
+  coords are wrong by the downscale ratio), and only after measuring whether
+  Omni grounds text reliably. Not before the demo.
+- C's multilingual-corpus point is fair and stands as a stated limitation: the
+  T2 prompt is English. If the FP list skews non-English, that is the reason.
+
 - **Path/name split fixed (INTEGRATION-B):** launch scripts now read
   `AIRLOCK_*_MODEL_PATH` (weights path) and auto-source `stack/models.env`;
   the service reads `AIRLOCK_*_MODEL` (request name, defaults
