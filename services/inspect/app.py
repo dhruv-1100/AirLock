@@ -112,7 +112,10 @@ async def healthz():
     clf, vlm = await asyncio.gather(
         _probe(t2.CLF_BASE_URL.rsplit("/v1", 1)[0] + "/health"),
         _probe(t3.VLM_BASE_URL.rsplit("/v1", 1)[0] + "/health"))
-    return {"ok": True, "clf": clf, "vlm": vlm, "mongo": _HAVE_MONGO,
+    # Real ping, not import success — INTEGRATION.md §6: with only _HAVE_MONGO
+    # a dead mongod looks healthy until the console is empty on stage.
+    return {"ok": True, "clf": clf, "vlm": vlm,
+            "mongo": (await mongo.healthy()) if _HAVE_MONGO else False,
             "uptime_s": int(time.monotonic() - _started),
             "overrides": verify_mod.override_count,
             "img_gate": {"seen": gate_img.seen_count,

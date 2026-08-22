@@ -3,3 +3,26 @@ uvicorn>=0.30
 httpx>=0.27
 pytest>=8
 pillow>=10
+
+# --- C's layer (mongo.py, stream.py, console_api.py, embed.py) -----------------
+# websockets is REQUIRED for ws://…/v1/stream. Without it at uvicorn START time,
+# uvicorn selects its no-op WebSocket implementation and the endpoint 404s while every
+# HTTP route keeps working — which looks exactly like a broken change stream.
+# See INTEGRATION.md §7. Installing it under a running server changes nothing; restart.
+websockets>=12
+motor>=3.5                # async MongoDB driver (wraps pymongo)
+pymongo>=4.8              # change streams, BSON Binary
+cryptography>=43          # AES-GCM for evidence crops and stored payloads
+pyyaml>=6                 # policy.yaml -> /v1/policy and the clause enum
+
+# --- optional, CPU only (NFR-S10 — never a GPU process) ------------------------
+# Without these the retrieval path still runs, but on a deterministic hash embedding:
+# the plumbing is exercised and semantic recall is meaningless. Install before seeding
+# policy_corpus for real.
+# sentence-transformers>=3     # bge-small-en-v1.5, 384-d
+# matplotlib>=3.8              # bench/report.py figures, bench/make_images.py charts
+
+# --- A's bench tooling (Phase 3, runs on the box, CPU only) --------------------
+aiohttp>=3.10             # bench/run_fpr.py HTTP client
+scipy>=1.13               # bench/fit_calibration.py minimize_scalar T fit
+# matplotlib (optional, above) also draws bench/fit_calibration.py reliability.png
