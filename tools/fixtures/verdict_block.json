@@ -1,6 +1,6 @@
 {
   "schema": "airlock.verdict.v1",
-  "request_id": "r_fixture1",
+  "request_id": "r_9f3a2c",
   "action": "block",
   "label": "CUSTOMER_RECORD",
   "severity": "HIGH",
@@ -20,10 +20,10 @@
   "decision_id": "6712c0f1a3e94b2d8c5e1102",
   "score_details": {
     "value": 0.0306,
-    "description": "reciprocal rank fusion: sum over input pipelines of weight * 1/(rankConstant + rank), rankConstant = 60",
+    "description": "sum of reciprocal rank fusion scores across input pipelines, weighted by pipeline weight",
     "details": [
-      { "inputPipelineName": "semantic", "rank": 1, "weight": 0.7, "value": 0.011475, "details": [] },
-      { "inputPipelineName": "lexical", "rank": 3, "weight": 0.3, "value": 0.004762, "details": [] }
+      {"inputPipelineName": "semantic", "rank": 1, "weight": 0.7, "value": 0.0115},
+      {"inputPipelineName": "lexical", "rank": 2, "weight": 0.3, "value": 0.0048}
     ]
   }
 }

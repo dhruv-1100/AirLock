@@ -14,6 +14,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
 
 # generated submission build
 submission/SUBMISSION.final.md
@@ -21,3 +22,4 @@ results/fpr_report.json
 results/REPORT.md
 results/false_positives.md
 results/scores_*.json
+results/report.json

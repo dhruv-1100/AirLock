@@ -1,0 +1,20 @@
+{"id": "smoke:01", "source": "smoke", "text": "How do I reverse a linked list in Python? I keep getting a None reference when I try to swap the pointers in the while loop."}
+{"id": "smoke:02", "source": "smoke", "text": "Explain the difference between TCP and UDP for a networking exam. When would a video call prefer one over the other?"}
+{"id": "smoke:03", "source": "smoke", "text": "My Stripe integration fails in test mode with card 4242424242424242. The docs say this card should always succeed — why do I get card_declined?"}
+{"id": "smoke:04", "source": "smoke", "text": "Write a regex that matches a credit card number format for input validation. I don't need to store the number, just check the shape."}
+{"id": "smoke:05", "source": "smoke", "text": "From the AWS tutorial: aws configure with access key AKIAIOSFODNN7EXAMPLE and run aws s3 ls to list your buckets."}
+{"id": "smoke:06", "source": "smoke", "text": "import pandas as pd\ndf = pd.read_csv('customers.csv')\nprint(df.groupby('plan').mrr.sum())\nWhy does this print NaN for every group?"}
+{"id": "smoke:07", "source": "smoke", "text": "Acme reported Q2 revenue of $1.2B, up 14% YoY, per the 10-Q filed 2025-08-04. Summarize the main growth drivers in two sentences."}
+{"id": "smoke:08", "source": "smoke", "text": "git commit 356a192b7913b04c54574d18c28d46e6395428ab broke the build. How do I bisect between that and HEAD?"}
+{"id": "smoke:09", "source": "smoke", "text": "My request with id 91fdca18-ea82-44a3-88e2-d47202c6729c returns a 500. How do I trace a request id through nginx logs?"}
+{"id": "smoke:10", "source": "smoke", "text": "Contact us at support@example.com or call 555-0100 during business hours. Is this valid placeholder copy for a template?"}
+{"id": "smoke:11", "source": "smoke", "text": "Prove that the sum of the first n odd numbers is n squared, using induction. Show the base case and the inductive step."}
+{"id": "smoke:12", "source": "smoke", "text": "sku,qty,price\nSKU-1,3,10.99\nSKU-2,6,20.99\nSKU-3,9,30.99\nSKU-4,12,40.99\nHow do I load this CSV into SQLite and sum price by sku prefix?"}
+{"id": "smoke:13", "source": "smoke", "text": "What's the idiomatic way to handle context cancellation in Go when fanning out to multiple goroutines with errgroup?"}
+{"id": "smoke:14", "source": "smoke", "text": "Set DATABASE_URL to your connection string, e.g. postgres://user:password@localhost:5432/mydb — replace user and password with your own values."}
+{"id": "smoke:15", "source": "smoke", "text": "Rewrite this sentence to be more concise: 'The meeting that was scheduled for the purpose of discussing the roadmap has been moved.'"}
+{"id": "smoke:16", "source": "smoke", "text": "Apple's stock closed at $233.12 yesterday according to Yahoo Finance. What P/E ratio does that imply given trailing EPS of $6.57?"}
+{"id": "smoke:17", "source": "smoke", "text": "Explain CSS grid vs flexbox with a two-column layout example. When does grid's explicit placement beat flexbox wrapping?"}
+{"id": "smoke:18", "source": "smoke", "text": "In the movie ticket API tutorial, the JWT example header is eyJhbGciOiJIUzI1NiJ9 — why is a JWT split into three dot-separated parts?"}
+{"id": "smoke:19", "source": "smoke", "text": "Our public docs say the rate limit is 100 requests per minute per API key. How should I implement client-side backoff for 429 responses?"}
+{"id": "smoke:20", "source": "smoke", "text": "Translate 'the quick brown fox jumps over the lazy dog' into French and German, keeping it a single natural sentence in each."}
