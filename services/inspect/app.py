@@ -64,6 +64,29 @@ except ImportError:
 async def _connect_mongo():
     if _HAVE_MONGO:
         await mongo.connect()
+
+
+@app.on_event("startup")
+async def _announce_endpoints():
+    """Print the resolved upstreams and probe them at boot.
+
+    A misrouted classifier is invisible until the first escalation, and then it
+    presents as a fail-closed BLOCK — i.e. as a broken detector, not as a
+    config error. Say it out loud at start instead (RUN-DAY.md §2).
+    """
+    targets = [("T2 classifier", t2.CLF_BASE_URL, t2.CLF_MODEL),
+               ("T3 vision", t3.VLM_BASE_URL, t3.VLM_MODEL),
+               ("sanctioned answer", TEXT_BASE_URL, TEXT_MODEL)]
+    print("airlock inspect-svc — resolved upstreams:", flush=True)
+    for name, url, model in targets:
+        up = await _probe(url.rsplit("/v1", 1)[0] + "/health")
+        print(f"  {'ok ' if up else 'DOWN'}  {name:18s} {url}  "
+              f"model={model}", flush=True)
+    if not any(await asyncio.gather(*(
+            _probe(u.rsplit('/v1', 1)[0] + '/health') for _, u, _ in targets))):
+        print("  NOTE: no model server reachable — every escalation will "
+              "fail closed to BLOCK. Expected before the servers are up.",
+              flush=True)
 _started = time.monotonic()
 _inflight = asyncio.Semaphore(MAX_INFLIGHT)
 _cache: dict[str, dict] = {}  # payload_sha256 → verdict body (instant re-block)
