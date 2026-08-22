@@ -21,8 +21,8 @@ seeded, the `airlock` sandbox is Ready, and the detector has a real measured num
 
 | # | Task | Cost | Status |
 |---|---|---|---|
-| B1 | **Three screenshots** — block card, console, proof. | 2 min | **BLOCKED on this box.** No Chrome or Chromium installed and the browser pane will not composite frames. Capture states are pre-staged as one URL each on the harness (`#block`, `#evidence`, `#console`, `#slider`, `#unavailable`), console is backfilled with 900 decisions. Anyone with a browser can do it. |
-| B2 | **Three beats through Chrome against the real service.** | 20 min | **BLOCKED, same reason.** Never been done. |
+| B1 | **Three screenshots** — block card, console, proof. | — | **DONE.** Chrome 151 installed, captured headless: `screenshots/verdict-card.png`, `console.png` (the standalone console against the LIVE service, real decisions mid-harness-run), `proof.png`. |
+| B2 | **Three beats through Chrome against the real service.** | 20 min | Now unblocked by Chrome 151. Not started. Beat 3 will not pass until A4. |
 | B3 | **The two MV3 paragraphs for the submission.** | 20 min | Mine, not started. Everything needed is in `NOTES_B.md`. |
 | B4 | Re-copy `results/scores_benign.json` over both console fixtures after A1 lands. | 1 min | Waiting on A1 |
 
@@ -45,6 +45,9 @@ seeded, the `airlock` sandbox is Ready, and the detector has a real measured num
 |---|---|---|
 | X1 | **OpenClaw is not installed into the sandbox.** The `airlock` sandbox exists and has the local inference route, but the agent runtime and `skills/airlock-verdict-explainer/` are not deployed. Everything Rule 02 needs is already evidenced without it, so this is a completeness item, not a blocker. | ~1 h |
 | X2 | **Nobody has rehearsed anything end to end.** Zero dress runs. | 1 h |
+| X3 | **MongoDB was listening on `0.0.0.0:27017` with no auth.** Found by fixing `proof.sh` (below). On a product whose claim is "nothing leaves this machine", an unauthenticated database on every interface is the finding proof.sh itself says to look for. `up_mongo.sh` now publishes `127.0.0.1:27017:27017`. **The running container still has the old binding** — recreate it once the harness run finishes. | 2 min |
+| X4 | **`proof.sh`'s listener check silently proved nothing.** Its awk filter used `\b`, which POSIX ERE does not support, so it matched no rows and printed a bare header under "expect 127.0.0.1 only". An empty table there reads as proof when it is the absence of proof. Fixed. | done |
+| X5 | `proof.sh` says "a 35B and a 7B VLM are co-resident" — both models are 30B. Same stale labels were in both consoles; fixed there. C owns proof.sh. | 1 min |
 
 ---
 

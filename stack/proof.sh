@@ -93,7 +93,10 @@ printf '  :8787 /healthz  %s\n' "${hz:-<unreachable>}"
 hdr "4. NOTHING LEAVES — every listener is loopback-bound"
 printf 'Listening sockets for our ports (expect 127.0.0.1 only, never 0.0.0.0):\n'
 if command -v ss >/dev/null 2>&1; then
-  ss -ltnp 2>/dev/null | awk 'NR==1 || /:(8000|8001|8002|8787|27017|5173)\b/' || true
+  # NOT \b — awk uses POSIX ERE, which has no word-boundary escape, so the old pattern
+  # matched nothing and this section printed a bare header. An empty table under
+  # "expect 127.0.0.1 only" reads as proof when it is the absence of proof.
+  ss -ltnp 2>/dev/null | awk 'NR==1 || /:(8000|8001|8002|8787|27017|5173|5174|5175)[[:space:]]/' || true
 elif command -v netstat >/dev/null 2>&1; then
   netstat -an 2>/dev/null | grep -E '\.(8000|8001|8002|8787|27017|5173)\b.*LISTEN' || true
 else

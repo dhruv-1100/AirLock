@@ -62,8 +62,9 @@
           font-size: 12px; line-height: 1.95; padding: 6px 0; }
   #feed::-webkit-scrollbar { width: 8px; }
   #feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 8px; }
-  .ln { display: grid; grid-template-columns: 74px 1fr 96px 66px 64px 40px 66px;
+  .ln { display: grid; grid-template-columns: 74px 1fr 96px 66px 150px 40px 72px;
         gap: 10px; padding: 0 16px; white-space: nowrap; border-left: 3px solid transparent; }
+  .ln > span { overflow: hidden; text-overflow: ellipsis; }
   .ln:hover { background: rgba(255,255,255,.035); }
   .ln.block { border-left-color: var(--red); }
   .ln.allow { border-left-color: rgba(74,222,128,.3); }
@@ -144,11 +145,11 @@
         <h2>Unified memory · one 128 GB pool</h2>
         <div class="pad">
           <div class="g">
-            <div class="gl"><span>KV cache · airlock-text 35B :8000</span><b id="kvT">—</b></div>
+            <div class="gl"><span>KV cache · airlock-text 30B :8000</span><b id="kvT">—</b></div>
             <div class="track"><div class="fill text" id="kvTf"></div></div>
           </div>
           <div class="g">
-            <div class="gl"><span>KV cache · airlock-vision 7B :8001</span><b id="kvV">—</b></div>
+            <div class="gl"><span>KV cache · airlock-vision 30B :8001</span><b id="kvV">—</b></div>
             <div class="track"><div class="fill vision" id="kvVf"></div></div>
           </div>
           <div class="shared">
