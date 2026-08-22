@@ -11,14 +11,29 @@ gb10/
 .airlock_key
 .airlock_resume_token
 
-# generated corpora and results (regenerable with one seeded command)
-# data/benign_v1.jsonl is NOT ignored: it is the FP-rate denominator and a required
-# submission attachment (SRS §14). Reproduce with
-#   python bench/build_benign.py --seed 1337 --out data/benign_v1.jsonl
+# Generated corpora and results.
+#
+# SRS §14 lists these as REQUIRED submission attachments, so they are tracked even
+# though they are regenerable — a judge who clones the repo must get the evidence, not
+# instructions for rebuilding it:
+#   data/benign_v1.jsonl + manifest + ATTRIBUTION.md   python bench/build_benign.py --seed 1337
+#   results/fpr_report.json, results/*.png             python bench/report.py
+#   results/proof_*.log                                bash stack/proof.sh | tee
+#   results/REPORT.md, results/false_positives.md      python bench/report.py
+#
+# data/sensitive_v1.jsonl is DELIBERATELY NOT tracked, and this is the one exception to
+# the rule above. It is 450 records of realistic-looking credentials, and GitHub push
+# protection rejects it — GH013, on the synthetic SLACK_BOT_TOKEN and AWS_ACCESS_KEY_ID
+# values at lines 12, 58 and 89. They are fake, but they are convincing enough to trip a
+# secret scanner, which is exactly what a PAYMENT_CARD/CREDENTIAL corpus is supposed to
+# be. Publishing a file of plausible live keys to teach a detector is a bad trade even
+# when the keys are invented, so §14's attachment is the BUILDER plus the manifest and
+# the per-class recall table, not the corpus itself:
+#   bench/build_sensitive.py + data/sensitive_v1.manifest.json  (seed 1337, reproducible)
+#
+# Still ignored below: raw dumps, and the pip/venv noise.
 data/sensitive_v1.jsonl
 data/dumps/
-results/*.png
-results/*.log
 
 # python
 __pycache__/
@@ -29,11 +44,7 @@ venv/
 
 # generated submission build
 submission/SUBMISSION.final.md
-results/fpr_report.json
-results/REPORT.md
-results/false_positives.md
 results/scores_*.json
-results/report.json
 results/ablation.json
 results/ablation/
 results/ablation_table.md
