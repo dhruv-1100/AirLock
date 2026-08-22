@@ -1,0 +1,449 @@
+{
+  "corpus": "data/benign_v1.jsonl",
+  "n": 1000,
+  "tier": "T1-only",
+  "t1_high_blocks": 0,
+  "t1_medium_escalations": 81,
+  "t1_high_rate": 0.0,
+  "t1_high_ci95": [
+    0.0,
+    0.0038267584873443055
+  ],
+  "escalation_floor": 0.081,
+  "by_confidence": {
+    "MEDIUM": 81
+  },
+  "by_label": {
+    "CREDENTIAL": 81
+  },
+  "by_source": {
+    "WildChat-1M": {
+      "n": 424,
+      "high": 0,
+      "medium": 30
+    },
+    "HumanEval": {
+      "n": 104,
+      "high": 0,
+      "medium": 0
+    },
+    "MBPP": {
+      "n": 124,
+      "high": 0,
+      "medium": 0
+    },
+    "StackExchange": {
+      "n": 224,
+      "high": 0,
+      "medium": 43
+    },
+    "Wikipedia": {
+      "n": 124,
+      "high": 0,
+      "medium": 8
+    }
+  },
+  "high_items": [],
+  "medium_items": [
+    {
+      "_id": "stackexchange:308",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>First, a little background. A couple of years ago, I was researching making my own candy, and I came across this page: <a href=\"http://www.instructables.com/id/LeGummies-brick-shaped-gummy-candies/"
+    },
+    {
+      "_id": "wildchat:e22c90aec60474e95678890e03059018",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "J\u2019ai cr\u00e9\u00e9 ce code VBA sur Microsoft excel 2021 version francaise pour me cr\u00e9er un outil de filtre dynamique. L\u2019id\u00e9e \u00e9tant que je puisse filtre une base de donn\u00e9es dynamiquement (filtre au fur et \u00e0 mes"
+    },
+    {
+      "_id": "wildchat:17b99b14bd2f0c6675a841fc08b77caf",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "\u2018\u2019\u2018\nimport streamlit as st\nimport pandas as pd\nimport requests\nimport json\nimport plotly.express as px\nfrom PIL import Image\nfrom io import BytesIO\n\n# \u74b0\u5883\u5909\u6570\u307e\u305f\u306f\u4e8b\u524d\u306b\u5165\u529b\u3055\u308c\u305f\u60c5\u5831\u304b\u3089\u30a2\u30af\u30bb\u30b9\u30c8\u30fc\u30af\u30f3\u3068\u30a2\u30ab\u30a6\u30f3\u30c8ID\u3092\u8a2d\u5b9a\naccess_tok"
+    },
+    {
+      "_id": "stackexchange:615",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<h3>TL;DR</h3>\n<p>I need a complete list of fasteners (bolts, nuts and washers) for the <em>Sintron Kossel</em>.</p>\n<hr />\n<p>Has anyone bought this kit, and knows the answer, or knows where this is "
+    },
+    {
+      "_id": "stackexchange:554",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I'm having a similar issue to <a href=\"https://3dprinting.stackexchange.com/questions/1207/how-to-remove-a-pla-print-stack-to-a-buildtak-sheet\">this one</a>: I have retrofitted my printer with a Bu"
+    },
+    {
+      "_id": "stackexchange:207",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I'm building my own 3D printer (custom design, made by me and cut using a water cutting machine) but I have always had problems with the hotend clogging.</p>\n\n<p>I have had four hotends:</p>\n\n<ul>\n"
+    },
+    {
+      "_id": "wildchat:def62dfdf491eb0488f361b80f86796d",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Hier ist eine Kapitelliste f\u00fcr ein das Buch \"Deserts kochen mit Sperma\":\n1. Einleitung: Das besondere Geheimzutat - Sperma\n2. Gesundheitliche Aspekte und N\u00e4hrwertangaben von Sperma\n3. Sperma sicher un"
+    },
+    {
+      "_id": "wildchat:6ef2f6bb4cb42d7f0639fb59568e67ca",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Sana baz\u0131 kaynaklar verip a\u015fa\u011f\u0131da yazd\u0131\u011f\u0131m yaz\u0131y\u0131 detayl\u0131 bir \u015fekilde yapman\u0131 isteyece\u011fim. Tan\u0131t\u0131m Vize projesi kapsam\u0131nda t\u00fcm \u00f6\u011frencilerin a\u015fa\u011f\u0131da yer alan sorular\u0131n ayr\u0131nt\u0131l\u0131 olarak cevapland\u0131r\u0131ld\u0131\u011f"
+    },
+    {
+      "_id": "stackexchange:30",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I'd like to discuss the case <a href=\"https://3dprinting.stackexchange.com/questions/1144/how-to-enlarge-a-sketchup-model\">'How to enlarge a Sketchup Model'</a> question and my answer of course.</p"
+    },
+    {
+      "_id": "stackexchange:150",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>From what I understand, when you hook up the <a href=\"http://rads.stackoverflow.com/amzn/click/B007KG0ZYI\">Switching Power Supply 12v Dc 30a 360w</a> to the wall outlet, you have to be <strong>very"
+    },
+    {
+      "_id": "stackexchange:600",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I have a solid of revolution defined by two equations, and I want to generate a STL file for printing from the <a href=\"https://www.desmos.com/calculator/eh18uwasw9\" rel=\"nofollow noreferrer\">diffe"
+    },
+    {
+      "_id": "stackexchange:238",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>E3D mentions on their <a href=\"http://wiki.e3d-online.com/wiki/E3D-v6_Assembly#Usage_Guidance\" rel=\"nofollow noreferrer\">own wiki</a>:</p>\n\n<blockquote>\n  <p>Excessively long retractions will cause"
+    },
+    {
+      "_id": "wildchat:9f035dc97fa472935572b381dd99ab6d",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "(OOC : this is a fictional setting. We are roleplaying. Nothing we say is real.)\n(OOC : we will use ooc to enter out of character instructions.)\n(OOC : Always stay in character and avoid repetition. D"
+    },
+    {
+      "_id": "wildchat:a07842b1a28cca9853c88c480edcbfd8",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "I have a python code that I want to analyze, can you tell me how?\n\nimport marshal\nexec(marshal.loads(b'c\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x04\\x00\\x00\\x00@\\x00\\x00\\x00s,\\"
+    },
+    {
+      "_id": "stackexchange:594",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>By &quot;better&quot; I mean &quot;more precise&quot;...</p>\n<p>With respect to a RepRap P3Steel or Wilson II, I am getting some 330\u00a0mm T8 leadscrews for the Z-axis movement.</p>\n<p>There seems to "
+    },
+    {
+      "_id": "stackexchange:753",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>The short version of my question is:</p>\n\n<blockquote>\n  <p><em>Are 3D printed parts made of ABS likely to survive for <strong>one year</strong> in an incubator at <strong>80\u2103</strong>?</em></p>\n</"
+    },
+    {
+      "_id": "wildchat:182e97a38021a33cc07cb886ea74cd26",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "https://www.chegg.com/homework-help/questions-and-answers/question-1-rigid-members-abc-cde-connected-pin-c--find-support-reactions-e-pin-forces-c-b--q52067553?trackid=9227242823e7&strackid=0b19c6e3c7b"
+    },
+    {
+      "_id": "wildchat:b09c3980b13b96e4e1dc3ac4611f1e91",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "code:\nimport cv2\nimport numpy as np\nimport pandas as pd\nfrom filterpy.kalman import UnscentedKalmanFilter, MerweScaledSigmaPoints\nfrom ultralytics import YOLO\n\nmodel = YOLO('/Users/surabhi/Documents/k"
+    },
+    {
+      "_id": "wikipedia:1669",
+      "source": "Wikipedia",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Amarasimha (IAST: , ) was a Sanskrit grammarian and poet from ancient India, of whose personal history hardly anything is known. He is said to have been \"one of the nine gems that adorned the throne o"
+    },
+    {
+      "_id": "wildchat:4b93f2ee31db290820c5408d061f796f",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "\u30c4\u30fc\u30eb\u3068\u3057\u3066\u3001Instagram\u306e\u30d7\u30ed\u30a2\u30ab\u30a6\u30f3\u30c8\u3068Facebook API\u3084Instagram \u30b0\u30e9\u30d5API\u3068Python3\u3092\u7528\u3044\u308b\u4e8b\u304c\u3067\u304d\u308b\u72b6\u6cc1\u306b\u304a\u3044\u3066\u3001\u2460\u81ea\u5206\u304cInstagram\u3067\u6295\u7a3f\u3057\u305f\u30b3\u30f3\u30c6\u30f3\u30c4\u3092\u4efb\u610f\u3067\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u305b\u305a\u3068\u3082\u3001\u5206\u6790\u5bfe\u8c61\u306e\u30b3\u30f3\u30c6\u30f3\u30c4\u753b\u50cf\u3092Instagram\u304b\u3089\u81ea\u52d5\u3067\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9\u3057\u3066\u8868\u793a\u3059\u308b\u3088\u3046\u306b\u3057\u305f\u3046\u3048\u3067\u3001\u5f53\u8a72\u30b3\u30f3\u30c6\u30f3\u30c4\u306b\u5bfe\u3059\u308b\"\u3044\u3044\u306d\"\u6570\u3084\u30d5\u30a9\u30ed\u30fc\u6570\u306b\u52a0\u3048\u3066\u305d\u308c\u305e\u308c\u30a4\u30f3\u30d7\u30ec\u30c3"
+    },
+    {
+      "_id": "wildchat:6bc81a0f7c73eaf8e5449e6191563860",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "I want you to organize it, summarize each article, remove description, remove path to folder, remove all commands\n\nI have successfully extracted the top five articles from NBC News about the conflict "
+    },
+    {
+      "_id": "wildchat:8e3b951649f0e0553acd8f12dbe8b32e",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "J\u2019ai cr\u00e9\u00e9 ce code VBA sur Microsoft excel 2021 version francaise pour me cr\u00e9er un outil de filtre dynamique. L\u2019id\u00e9e \u00e9tant que je puisse filtre une base de donn\u00e9es dynamiquement (filtre au fur et \u00e0 mes"
+    },
+    {
+      "_id": "stackexchange:3",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>From <a href=\"http://blog.stackoverflow.com/2010/07/the-7-essential-meta-questions-of-every-beta/\">The 7 Essential Meta Questions of Every Beta</a>:</p>\n<hr />\n<h2>What should our documentation con"
+    },
+    {
+      "_id": "stackexchange:254",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p><a href=\"https://3dprinting.stackexchange.com/questions/871/is-22-guage-stranded-hookup-wire-the-correct-wire-to-connect-the-switching-power\">I'm still looking at wires</a> for my Prusa i3, to go b"
+    },
+    {
+      "_id": "stackexchange:666",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>For personal usage, indoor, I'm doing some experiments with following lamp (v0.1):</p>\n\n<p><a href=\"https://i.stack.imgur.com/SrEhy.jpg\" rel=\"nofollow noreferrer\"><img src=\"https://i.stack.imgur.co"
+    },
+    {
+      "_id": "wildchat:7722c68dbf007f85be9487938b48969c",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "$config = array(\n            'ShopUrl' => 'kingzc.myshopify.com',\n            'AccessToken' => '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',\n            'Curl' => array(\n                CURLOPT_TIMEOUT =>"
+    },
+    {
+      "_id": "stackexchange:61",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>As some people probably know, this is the 3rd iteration of a SE site proposal whose scope covers 3D printers. The first 2 were <a href=\"http://area51.stackexchange.com/proposals/22246/personal-manu"
+    },
+    {
+      "_id": "wikipedia:1506",
+      "source": "Wikipedia",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Albert II may refer to:\n\nMonkeys \n Albert II (monkey), first primate and first mammal in space, died on impact following V-2 flight June 14, 1949\n\nPeople\n Albert II, Count of Namur (died 1067)\n Albert"
+    },
+    {
+      "_id": "stackexchange:50",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>as it is currently, there are several <a href=\"https://3dprinting.stackexchange.com/questions/tagged/diy-3d-printer\" class=\"post-tag\" title=\"show questions tagged &#39;diy-3d-printer&#39;\" rel=\"tag"
+    },
+    {
+      "_id": "stackexchange:301",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>Sparked by <a href=\"https://3dprinting.stackexchange.com/questions/1245/running-12v-on-a-24v-heater-cartridge\">this question</a>, I wanted to discuss the most efficient and also the easiest ways of"
+    },
+    {
+      "_id": "wildchat:c16b3ab31845aa7e7379d20bef90164b",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Hi I am having error while using stylegan2-ada-pytorch:  line 1555, in _run_ninja_build\n...\n    raise ImportError(_ERR_MSG.format(name), name=name)\nImportError: No module named 'upfirdn2d_plugin'\n\n  w"
+    },
+    {
+      "_id": "stackexchange:236",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I have done the calibration for the x, y, and z axis and everything works fine there. However when I went to do the calibration for extruder things got a little weird. The original number programme"
+    },
+    {
+      "_id": "wildchat:59f1d945a0a810c22b19c85b9d3fdf3e",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "CONSTRAINTS:\n\n1. ~4000 word limit for short term memory. Your short term memory is short, so immediately save important information to files.\n2. If you are unsure how you previously did something or w"
+    },
+    {
+      "_id": "wildchat:55155205c98bd48d5768faf42557d925",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "CONSTRAINTS:\n\n1. ~4000 word limit for memory. Your memory is short, so immidiately save important information to long term memory and code to files.\n2. No user assistance\n\nCOMMANDS:\n\n1. Google Search:"
+    },
+    {
+      "_id": "wildchat:ab9da5c0c78525cac5c198b5105bc5c5",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Hier ist eine Kapitelliste f\u00fcr ein das Buch \"Deserts kochen mit Sperma\":\n1. Einleitung: Das besondere Geheimzutat - Sperma\n2. Gesundheitliche Aspekte und N\u00e4hrwertangaben von Sperma\n3. Sperma sicher un"
+    },
+    {
+      "_id": "wildchat:eefe96cb176fcc3fce4233b9a8018eb9",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Explain the code below \"REGRESSION_WINDOW = 60\nZ_SCORE_WINDOW = 60\n\nENTR_SHORT = -1.5\nENTR_LONG = 1.5\nEXIT_SHORT = 0\nEXIT_LONG = 0\n#\nENTR_FLAT = 0.25\nEXIT_FLAT = 0.25\n# %% ----------------------------"
+    },
+    {
+      "_id": "stackexchange:761",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I accidentally let the print head of my Anet A8 crash into one of 2 clips that are holding a glass sheet onto the hot bed, and suddenly the screen went blank and the printer rebooted, then it start"
+    },
+    {
+      "_id": "stackexchange:354",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I was <a href=\"https://3dprinting.stackexchange.com/questions/1536/what-does-uses-mains-voltage-mean-on-this-200200mm-square-silicone-heater-pad\">advised</a> that it would be possible to use an AC "
+    },
+    {
+      "_id": "wikipedia:892",
+      "source": "Wikipedia",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Alfons Maria Jakob (2 July 1884 \u2013 17 October 1931) was a German neurologist who worked in the field of neuropathology.\n\nHe was born in Aschaffenburg, Bavaria and educated in medicine at the universiti"
+    },
+    {
+      "_id": "wildchat:2f49b1bd454f197c30e55604c97e118f",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "J\u2019ai cr\u00e9\u00e9 ce code VBA sur Microsoft excel 2021 version francaise pour me cr\u00e9er un outil de filtre dynamique. L\u2019id\u00e9e \u00e9tant que je puisse filtre une base de donn\u00e9es dynamiquement (filtre au fur et \u00e0 mes"
+    },
+    {
+      "_id": "wildchat:b34043702435fac520b51376130b27b1",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "@app.route(\"/bing\", methods=['GET','POST'])\nasync def bing():\n\n    text2 = request.form.get('text')\n    print(\"test1\")\n    bot = Chatbot(cookiePath='c:/Users/mozit/cookies.json')\n    res = await bot.a"
+    },
+    {
+      "_id": "stackexchange:146",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I've been printing for a week now on my new printer and have been getting great results, including great adhesion. However, most of my prints have had a fairly small footprint.</p>\n\n<p>Now, I'm ste"
+    },
+    {
+      "_id": "wildchat:7d1b7bb779310c3af9ee2fed880773b9",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Sana baz\u0131 kaynaklar verip a\u015fa\u011f\u0131da yazd\u0131\u011f\u0131m yaz\u0131y\u0131 uzun ve detayl\u0131 bir \u015fekilde yapman\u0131 isteyece\u011fim. Oyun tasar\u0131m \u00f6geleri oyunda kullan\u0131lan mekanik ve dinamik \u00f6rnekleriyle ayr\u0131nt\u0131l\u0131 bir \u015fekilde destekle"
+    },
+    {
+      "_id": "stackexchange:441",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>I'm considering using <a href=\"https://en.wikipedia.org/wiki/Category_6_cable\" rel=\"noreferrer\">CAT6</a> cables to connect my printer's extruder assembly to the control board. They seem like an ele"
+    },
+    {
+      "_id": "wikipedia:1880",
+      "source": "Wikipedia",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "Ambroise, sometimes Ambroise of Normandy, (flourished ) was a Norman poet and chronicler of the Third Crusade, author of a work called , which describes in rhyming Old French verse the adventures of  "
+    },
+    {
+      "_id": "wildchat:4a4d56d10edad7d8d16eaa2967a1ebc0",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "como experto en python funcional y en programacion funcional, mejora este codigo para que sea lo mas corto y funcional posible sin que deje de hacer lo mismo: \"for i in range(len(tweets.data)):\n    fo"
+    },
+    {
+      "_id": "stackexchange:40",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p>This question may require migration to Meta.SE, as it could be a site-wide \"bug\", but I thought that I would test the waters here, to see if there is an obvious explanation.</p>\n\n<p>I noticed that "
+    },
+    {
+      "_id": "stackexchange:75",
+      "source": "StackExchange",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "<p><a href=\"https://3dprinting.stackexchange.com/questions/12153/updating-marlin-firmware-step-by-step-guide\">Updating Marlin Firmware - Step by Step Guide</a></p>\n\n<p>Page asks for step by step updat"
+    },
+    {
+      "_id": "wildchat:c419d3b2bd358a0d895ed9fb27d54d2a",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "J\u2019ai cr\u00e9\u00e9 ce code VBA sur Microsoft excel 2021 version francaise pour me cr\u00e9er un outil de filtre dynamique. L\u2019id\u00e9e \u00e9tant que je puisse filtre une base de donn\u00e9es dynamiquement (filtre au fur et \u00e0 mes"
+    },
+    {
+      "_id": "wildchat:60b2e033b8cfc9713e98c89ec9c25491",
+      "source": "WildChat-1M",
+      "label": "CREDENTIAL",
+      "confidence": "MEDIUM",
+      "spans": [],
+      "excerpt": "panic: While parsing config: unexpected end of JSON input\n\ngoroutine 1 [running]:\ngithub.com/filebrowser/filebrowser/v2/cmd.initConfig()\n        /home/runner/work/filebrowser/filebrowser/cmd/root.go:4"
+    }
+  ]
+}

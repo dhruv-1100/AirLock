@@ -291,3 +291,84 @@ for when the gateway is restarting. Both work.**
   closed by the merge. Still `corpus_is_real: false`, and still perfectly separated, so
   the slider reads 0.00% FPR at every τ. **Do not rehearse the slider against it** — one
   real harness run against a live classifier fixes both.
+
+---
+
+# Round 4 — the real corpus landed
+
+`data/benign_v1.jsonl` is now real: **n=1000, `corpus_is_real: true`, zero synthetic**,
+five of six sources pulled live from HuggingFace (WildChat 424, StackExchange 224,
+MBPP 124, HumanEval 104, Wikipedia 124; CFPB redistributed — its API is retired).
+1000 unique texts, no duplicates, 200–3995 chars. The MBPP composition fix took it from
+1 usable to 124, and the `hf_config` fix made Wikipedia run at all.
+
+## 9. Two published Stripe test PANs auto-block at T1-HIGH
+
+**Severity: high — a false positive on stage that no model can rescue.**
+
+Found by scanning the corpora with A's own `t1.scan()` offline, before any harness run.
+`services/inspect/tiers/t1.py` `STRIPE_TEST_PANS` is missing two cards that Stripe
+publishes:
+
+```
+4000000000000077   -> T1 PAYMENT_CARD / HIGH   (should be BENIGN by exclusion)
+4000000000000093   -> T1 PAYMENT_CARD / HIGH   (should be BENIGN by exclusion)
+```
+
+They carry a valid issuer prefix and a valid Luhn digit, so `PAN_RE` + `luhn()` fire and
+**T1-HIGH blocks with no model call** — meaning no later tier can rescue them and the
+false positive goes straight to the reported total. SRS §6.2 is explicit that published
+test PANs route to BENIGN by exclusion list.
+
+Why this matters more than a two-line diff suggests: *"why does Stripe's test card
+4000000000000077 return card_declined in my integration tests"* is a completely natural
+question. A judge could ask it. It is precisely the beat-2 failure the runbook has a
+recovery line for.
+
+**A — two entries:**
+
+```diff
+ STRIPE_TEST_PANS = {
+     "4242424242424242", "4000056655665556", "5555555555554444",
++    "4000000000000077", "4000000000000093",
+```
+
+Left for A: `t1.py` is A's file per SRS §9.
+
+### The test that found it was flaky, and is now not
+
+The hard-negative bucket sampled 3 PANs at random from the published set, so it caught
+`4000000000000077` on one seed and missed it on the next — and a green run gets believed.
+`build_sensitive.py` now emits **one probe per published PAN** (17 of them), tagged with
+a `probe` field, so every card is exercised on every build regardless of seed.
+
+`bench/build_sensitive.py` also keeps its PAN list **deliberately independent** of
+`t1.py`'s. If the corpus only used PANs the detector already excludes, this bucket could
+never detect a gap in that exclusion list. Two independent lists disagreeing is the
+oracle working, not a bug to tidy away by sharing a constant.
+
+## 10. T1-only ablation row, measured offline with no GPU
+
+`bench/t1_offline.py` scans a corpus with Tier 1 alone, in-process, no service required.
+Against the real benign corpus:
+
+| | |
+|---|---|
+| **T1-HIGH false positives** | **0 / 1000** — below 0.30% at 95% confidence by the rule of three |
+| T1-MEDIUM escalations to T2 | 81 / 1000 = **8.1%** — a floor under the escalation rate (NFR-T6) |
+| T1-HIGH catches on the sensitive split | 106 / 436 = **24.3%** recall with no model call |
+
+**That is ablation row 1, and it is available now** — hours before the servers are warm,
+re-runnable in two seconds, and it needs no GPU. A: it should agree with your row 1 from
+`run_ablation.py`; if it does not, one of us has a bug worth finding before 16:00.
+
+`0/1000` on the tier that blocks without a model is a strong result and belongs in the
+submission in those words — never as "zero".
+
+## Also worth knowing about the corpus
+
+**It is multilingual.** WildChat includes substantial non-English content (Chinese,
+among others) — that is authentic real-world chat traffic, not a defect. But the T2
+system prompt is English, and no one has measured whether classification behaves the same
+on a Chinese paste. If the FP list comes back skewed toward non-English items, that is the
+explanation, and it is an honest limitation to state rather than a bug to hide.
