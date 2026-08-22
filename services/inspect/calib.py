@@ -69,11 +69,14 @@ def label_logits_from_logprobs(choice_logprobs):
     if entry is None or not entry.get("top_logprobs"):
         raise ValueError("no top_logprobs at label position")
 
-    # Mass per label: candidate token (sans leading quote/space) must be a
-    # prefix of the label.
+    # Mass per label: the candidate token must prefix the label. Real
+    # tokenizers hand back leading quotes, spaces, newlines and mixed case
+    # here, and a strict match silently matches NOTHING — which sends every
+    # call down the verbalized-confidence fallback and saturates the score
+    # distribution (INTEGRATION.md §11). Normalise both sides.
     mass = {lb: 0.0 for lb in LABELS}
     for cand in entry["top_logprobs"]:
-        tok = cand["token"].lstrip(' "')
+        tok = cand["token"].strip(' "\n\t\r').upper()
         if not tok:
             continue
         p = math.exp(cand["logprob"])
@@ -95,14 +98,29 @@ def p_block_from_logits(logits, T=None):
     return 1.0 - exp.get("BENIGN", 0.0) / total
 
 
-def p_block_from_logprobs(choice_logprobs, verdict, T=None):
-    """choice_logprobs: OpenAI-shape list of {token, logprob, top_logprobs}.
+# How often the real posterior was unavailable and we fell back. This used to
+# be silent, which is why a fully-saturated score distribution looked like a
+# calibrated one for a whole run.
+fallback_count = 0
+logprob_count = 0
 
-    Falls back to the verbalized confidence when the logprob walk fails —
-    logged upstream, never fatal.
+
+def p_block_from_logprobs(choice_logprobs, verdict, T=None):
+    """Returns (p_block, source) where source is "logprobs" or "verbalized".
+
+    The caller MUST record the source: verbalized confidence is bimodal —
+    models state 0.95-0.99 — so a run that silently falls back produces two
+    spikes with nothing in between, an inert threshold slider, and an ECE
+    computed over two points. Reporting that as a calibrated posterior would
+    be reporting a number we did not measure.
     """
+    global fallback_count, logprob_count
     try:
-        return p_block_from_logits(label_logits_from_logprobs(choice_logprobs), T)
+        p = p_block_from_logits(label_logits_from_logprobs(choice_logprobs), T)
+        logprob_count += 1
+        return p, "logprobs"
     except (KeyError, ValueError, TypeError):
+        fallback_count += 1
         conf = float(verdict.get("confidence", 0.5))
-        return conf if verdict.get("label", "BENIGN") != "BENIGN" else 1.0 - conf
+        p = conf if verdict.get("label", "BENIGN") != "BENIGN" else 1.0 - conf
+        return p, "verbalized"

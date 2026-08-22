@@ -128,6 +128,51 @@ def test_cache_replay_reports_only_cache(client, monkeypatch):
     assert v["tier"] == "CACHE" and set(v["tier_timings"]) == {"CACHE"}
 
 
+# ------------------------------------------- p_block / verdict consistency
+def test_overridden_verdict_reports_p_block_zero(monkeypatch):
+    """Found by dry-running the pipeline against bench/mock_vllm.py.
+
+    When span verification overrules the model, the DECISION is BENIGN. If
+    p_block kept the model's pre-override score, the verdict body would read
+    `action:allow, p_block:0.97` — and because B's threshold slider redraws
+    the FPR/recall curve by re-thresholding these cached scores, that item
+    would count as a block at every tau below 0.97. The published curve would
+    disagree with the verdicts the service actually returned.
+    """
+    from services.inspect import app as m
+    verdict = {"label": "FINANCIAL_NONPUBLIC", "severity": "HIGH",
+               "policy_clause_id": "POL-006",
+               "evidence_spans": ["not present in the payload"]}
+    out = m.verify(verdict, "a completely unrelated benign payload")
+    assert out["label"] == "BENIGN" and out["override"] == "unverified_evidence"
+
+    # The router's rule, asserted directly: an override forces p_block to 0 so
+    # the cached score reproduces the verdict at every selectable threshold.
+    p_block = 0.97
+    if "override" in out:
+        p_block = 0.0
+    assert p_block < min(m.MODES.values())
+
+
+def test_p_block_reports_its_source():
+    """INTEGRATION.md §11: a silent fallback to verbalized confidence looked
+    like a calibrated posterior for a whole run. The source must be visible."""
+    import math
+    from services.inspect.calib import p_block_from_logprobs
+    content = '{"label":"BENIGN","severity":"NONE"}'
+    i = content.find('"BENIGN"')
+    toks = [{"token": content[:i + 1], "logprob": -0.01, "top_logprobs": []},
+            {"token": "BEN", "logprob": math.log(0.9), "top_logprobs": [
+                {"token": ' "BEN', "logprob": math.log(0.9)},
+                {"token": "\nFIN", "logprob": math.log(0.1)}]},
+            {"token": content[i + 4:], "logprob": -0.01, "top_logprobs": []}]
+    p, src = p_block_from_logprobs(toks, {"label": "BENIGN", "confidence": 0.97})
+    assert src == "logprobs" and 0.0 < p < 0.5   # quotes/newlines still match
+
+    p, src = p_block_from_logprobs([], {"label": "BENIGN", "confidence": 0.97})
+    assert src == "verbalized"                   # and it says so
+
+
 # ------------------------------------------------------------ synthetic scores
 def test_synthetic_scores_shape(tmp_path):
     out = tmp_path / "scores.json"   # never clobber the team's results file

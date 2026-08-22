@@ -146,6 +146,16 @@ def main():
     e_after, d_after = ece(samples, T)
     print(f"T = {T:.4f}   NLL {nll(samples, 1.0):.4f} → {res.fun:.4f}   "
           f"ECE {e_before:.4f} → {e_after:.4f}")
+    if e_after > e_before:
+        # T minimises NLL, not ECE — they can disagree. Say so out loud: the
+        # submission reports ECE before/after, and shipping a T that worsens
+        # the number we publish is a decision, not a detail to discover later.
+        print(f"  WARNING: temperature scaling made ECE WORSE "
+              f"({e_before:.4f} → {e_after:.4f}) while improving NLL.\n"
+              f"  Report both honestly. Consider shipping T=1.0 and saying the "
+              f"model was already near-calibrated on this split — that is a\n"
+              f"  legitimate finding, not a failure. Do NOT report only the "
+              f"metric that improved.")
 
     (ROOT / "results").mkdir(exist_ok=True)
     (ROOT / "results" / "calibration.json").write_text(json.dumps({

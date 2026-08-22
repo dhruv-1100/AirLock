@@ -1,0 +1,27 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1600, "h": 900, "title": "01 · Title" },
+    { "file": "Problem.dc.html", "x": 1720, "y": 0, "w": 1600, "h": 900, "title": "02 · Problem" },
+    { "file": "Architecture.dc.html", "x": 3440, "y": 0, "w": 1600, "h": 900, "title": "03 · Cascade" },
+    { "file": "Evidence.dc.html", "x": 0, "y": 1060, "w": 1600, "h": 900, "title": "04 · The number" },
+    { "file": "Hardware.dc.html", "x": 1720, "y": 1060, "w": 1600, "h": 900, "title": "05 · The box" },
+    { "file": "System.dc.html", "x": 3440, "y": 1060, "w": 1600, "h": 900, "title": "Design system" }
+  ],
+  "annotations": [
+    {
+      "id": "brackets",
+      "x": 0,
+      "y": -150,
+      "w": 560,
+      "text": "Every [BRACKET] is a measured value — fill from your own runs, never invent one. If FPR is 0, write \"below 0.3% by the rule of three\", never \"zero\"."
+    },
+    {
+      "id": "scale-note",
+      "x": 3440,
+      "y": -150,
+      "w": 520,
+      "text": "Artboards are 1600×900. Export at ×1.2 for 1080p. Body type floor is 22px here — anything smaller dies on a projector."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}
