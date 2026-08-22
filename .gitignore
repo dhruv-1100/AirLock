@@ -23,3 +23,6 @@ results/REPORT.md
 results/false_positives.md
 results/scores_*.json
 results/report.json
+
+# local venv
+.venv/

@@ -141,6 +141,74 @@ is lost.
 
 ---
 
+---
+
+# Round 2 — found after the merge to `main`
+
+Merged state verified end to end on C's machine: **52 tests green**, service boots,
+`T0` allows, `T1` blocks a synthetic AWS key at `POL-001` with the span extracted and
+`bytes_egressed: 0`, `/v1/policy` serves the nine clauses, `/v1/decisions` and
+`ws /v1/stream` both live off C's router. A's integration of §1–§5 is complete and
+correct — `include_router` mounted, `payload_text` passed on blocks, `get_by_hash` at
+position zero.
+
+Two new findings.
+
+## 6. `/healthz` reports `"mongo": true` when Mongo is disabled or down
+
+**Severity: medium — it disables the early-warning signal, and it is one line.**
+
+`app.py:107` reports `_HAVE_MONGO`, which only means *the import succeeded*. It stays
+`true` with `MONGO_ENABLED=false` and with `mongod` stopped. Observed on the merged tree:
+
+```
+/healthz        mongo: true      <- wrong
+/v1/decisions   mongo: false     <- correct (C's router calls mongo.healthy())
+MONGO_ENABLED=false              <- ground truth
+```
+
+Per SRS §5.2 the extension shows an **amber dot** when any `/healthz` field is false.
+That signal is exactly how we would notice Mongo had died *before* walking on stage.
+As written it can never fire for Mongo: the console would just be silently empty, the
+`decision_id`s would be fakes, and beat 4 would do nothing.
+
+**A — one line.** `mongo.healthy()` already exists and does a real ping:
+
+```diff
+-    return {"ok": True, "clf": clf, "vlm": vlm, "mongo": _HAVE_MONGO,
++    return {"ok": True, "clf": clf, "vlm": vlm,
++            "mongo": (await mongo.healthy()) if _HAVE_MONGO else False,
+```
+
+Left for A rather than patched by C: `app.py` is A's file per SRS §9, and a concurrent
+edit to it is precisely the conflict that rule exists to prevent.
+
+## 7. `ws /v1/stream` 404s if uvicorn starts without the `websockets` package
+
+**Severity: medium — it looks exactly like a broken change stream.**
+
+Not a code bug. If `websockets` (or `wsproto`) is not installed **at the moment uvicorn
+starts**, uvicorn selects its no-op WebSocket implementation and every upgrade request
+gets a plain `404` — while every HTTP route keeps working normally. C hit this: installed
+the package, but the already-running server had bound without it.
+
+Symptom on stage: the console renders, backfills 50 decisions over HTTP, and then never
+updates. The instinct is to go debug the change stream, the resume token, or Mongo. All
+three would be fine.
+
+**Check this first, before suspecting `stream.py`:**
+
+```bash
+pip install websockets
+python -c "import websockets; print(websockets.__version__)"
+# then RESTART uvicorn — installing it under a running server changes nothing
+```
+
+Added to `services/inspect/requirements.txt`. A healthy connect returns
+`{"type":"hello","policy_version":"policy_v1","resume":null}` as the first frame.
+
+---
+
 ## Merge order and conflict resolution
 
 ```bash
