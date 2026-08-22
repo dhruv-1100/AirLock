@@ -2,6 +2,21 @@
 
 ## A → team
 
+- **INTEGRATION.md §9 fixed (C's find, thank you):** `STRIPE_TEST_PANS` was
+  missing `4000000000000077` and `...93`. Widened to 26 published cards
+  (all Luhn-checked), and `tests/test_t1.py` now probes **every** entry plus
+  cross-checks C's independent corpus list — no sampling, so this class of gap
+  cannot recur silently. Verified: `bench/t1_offline.py` → **0/1000 T1-HIGH
+  false positives** on the real benign corpus, 8.1% MEDIUM escalation.
+- **One PAN left blocking on purpose — team call needed:** `4111111111111111`
+  is widely published, but B verified it blocking at T1-HIGH "as specified"
+  and may use it as a demo payload. Excluding it is a behaviour change across
+  owners, so I flagged rather than made it. **B: do you rely on it? If not,
+  I'll exclude it — a judge pasting the most famous test card in existence and
+  getting a block is a live FP risk on stage.**
+- C's multilingual-corpus point is fair and stands as a stated limitation: the
+  T2 prompt is English. If the FP list skews non-English, that is the reason.
+
 - **Path/name split fixed (INTEGRATION-B):** launch scripts now read
   `AIRLOCK_*_MODEL_PATH` (weights path) and auto-source `stack/models.env`;
   the service reads `AIRLOCK_*_MODEL` (request name, defaults
