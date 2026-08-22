@@ -50,10 +50,8 @@ STRIPE_TEST_PANS = {
     "4000000000000093", "4000000000000002", "4000000000009995",
     "4000000000009987", "4000000000000069", "4000000000000127",
     "4000000000000119", "4000002500003155", "4000002760003184",
-    # NOT excluded, deliberately: 4111111111111111. It is widely published, but
-    # B verified and documented it blocking at T1-HIGH "as specified"
-    # (INTEGRATION-B.md) and may use it as a demo payload. Excluding it is a
-    # cross-owner behaviour change — raised in NOTES.md, not made unilaterally.
+    "4111111111111111",   # the classic published test Visa — B confirmed
+                          # nothing depends on it blocking
     # Mastercard
     "5555555555554444", "5200828282828210", "5105105105105100",
     "2223003122003222",
