@@ -140,11 +140,26 @@ def load(path: Path) -> list[dict]:
 
 
 def corpus_is_real() -> bool:
+    """True only if the corpus is real AND its provenance claim holds.
+
+    `corpus_is_real` alone is not enough: redistribution can produce a real, n=1000
+    corpus drawn almost entirely from one source, which still satisfies that flag while
+    invalidating the "independent sources" claim the submission makes. `provenance_ok`
+    is the second condition.
+    """
     m = Path("data/benign_v1.manifest.json")
     if not m.exists():
         return True
     try:
-        return bool(json.loads(m.read_text()).get("corpus_is_real", True))
+        d = json.loads(m.read_text())
+        if not d.get("corpus_is_real", True):
+            return False
+        if d.get("provenance_ok") is False:
+            print("  ! manifest provenance_ok=false:", file=sys.stderr)
+            for pb in d.get("provenance_problems", []):
+                print(f"      {pb}", file=sys.stderr)
+            return False
+        return True
     except Exception:  # noqa: BLE001
         return True
 

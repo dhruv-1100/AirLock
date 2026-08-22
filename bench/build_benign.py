@@ -481,7 +481,63 @@ def _synthetic(src: Source, rng: random.Random) -> list[tuple[str, str]]:
 
 
 # --------------------------------------------------------------------------- build
-def build(seed: int, out_path: Path, allow_synthetic: bool) -> int:
+# ---------------------------------------------------------------- provenance guards
+# R13's whole premise is "six independent sources, so no single licence challenge can
+# sink the denominator". Redistribution protects the denominator (n stays 1000) but it
+# can silently destroy that premise: five sources failing and one covering the shortfall
+# produced a 1000/1000 single-source corpus that printed "n=1000 ✓" and declared
+# corpus_is_real: true. The number looked perfect and the property was gone.
+#
+# These are hard floors. A corpus that violates them is not written without --force.
+MIN_SOURCES = 4          # below this, "independent sources" is not a claim we can make
+MAX_SOURCE_SHARE = 0.55  # no single source may dominate the denominator
+
+
+def _check_provenance(sources, n_total: int) -> list[str]:
+    """Returns a list of provenance violations. Empty means the corpus is defensible."""
+    used = [s for s in sources if s.got > 0]
+    problems = []
+    if len(used) < MIN_SOURCES:
+        problems.append(
+            f"only {len(used)} source(s) contributed ({', '.join(s.name for s in used)}); "
+            f"minimum is {MIN_SOURCES}. 'Independent sources' would be a false claim."
+        )
+    for s in used:
+        share = s.got / n_total if n_total else 0
+        if share > MAX_SOURCE_SHARE:
+            problems.append(
+                f"{s.name} is {share * 100:.0f}% of the corpus "
+                f"({s.got}/{n_total}); ceiling is {MAX_SOURCE_SHARE * 100:.0f}%."
+            )
+    return problems
+
+
+def build(seed: int, out_path: Path, allow_synthetic: bool, force: bool = False) -> int:
+    # Do not silently replace a real corpus with placeholder text. The corpus is a
+    # tracked submission attachment (SRS §14), so a --allow-synthetic run followed by
+    # `git add -A` overwrites the deciding artifact with filler and the manifest that
+    # results looks *more* correct than the real one, because synthetic generation hits
+    # its quota exactly while real fetching does not. This has happened once already.
+    if allow_synthetic and not force and out_path.exists():
+        mpath = out_path.with_name(out_path.stem + ".manifest.json")
+        try:
+            if json.loads(mpath.read_text()).get("corpus_is_real"):
+                print(
+                    f"\nREFUSING: {out_path} is a REAL corpus "
+                    f"(manifest says corpus_is_real: true).\n"
+                    f"  --allow-synthetic would replace the deciding artifact with "
+                    f"placeholder text.\n"
+                    f"  Re-run without --allow-synthetic, or pass --force if you truly "
+                    f"mean to discard it.\n",
+                    file=sys.stderr,
+                )
+                return 3
+        except Exception:  # noqa: BLE001
+            pass
+    return _build(seed, out_path, allow_synthetic, force)
+
+
+def _build(seed: int, out_path: Path, allow_synthetic: bool, force: bool = False) -> int:
     rng = random.Random(seed)
     records: list[dict] = []
     any_synthetic = False
@@ -585,6 +641,30 @@ def build(seed: int, out_path: Path, allow_synthetic: bool) -> int:
 
     rng.shuffle(records)
 
+    # ---- PROVENANCE GATE — before anything is written ----
+    # Redistribution keeps n at 1000; it does not keep the corpus defensible. Check the
+    # property we actually claim, not just the count.
+    problems = _check_provenance(SOURCES, len(records))
+    if problems and not any_synthetic:
+        print("\n" + "=" * 72, file=sys.stderr)
+        print("  PROVENANCE FAILURE — refusing to write a corpus that misstates itself",
+              file=sys.stderr)
+        for pb in problems:
+            print(f"    · {pb}", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("  n would have been 1000 and corpus_is_real would have been true, which is",
+              file=sys.stderr)
+        print("  exactly why this check exists: the count looks right while the claim",
+              file=sys.stderr)
+        print("  'independent sources' has quietly stopped being true.", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("  Fix the failing source(s), or pass --force to write it anyway and state",
+              file=sys.stderr)
+        print("  the concentration honestly in the submission.", file=sys.stderr)
+        print("=" * 72 + "\n", file=sys.stderr)
+        if not force:
+            return 4
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         for r in records:
@@ -596,6 +676,11 @@ def build(seed: int, out_path: Path, allow_synthetic: bool) -> int:
         "seed": seed,
         "n": len(records),
         "corpus_is_real": not any_synthetic,
+        "sources_used": sum(1 for s_ in SOURCES if s_.got > 0),
+        "max_source_share": round(
+            max((s_.got for s_ in SOURCES), default=0) / max(1, len(records)), 4),
+        "provenance_ok": not _check_provenance(SOURCES, len(records)),
+        "provenance_problems": _check_provenance(SOURCES, len(records)),
         "n_synthetic": sum(1 for r in records if r["synthetic"]),
         "reproduce": f"python bench/build_benign.py --seed {seed} --out {out_path}",
         "min_chars": MIN_CHARS,
@@ -688,8 +773,13 @@ def main() -> int:
         action="store_true",
         help="permit clearly-labelled placeholder text when a real dump is missing",
     )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="override the provenance gate, and permit overwriting a real corpus",
+    )
     a = ap.parse_args()
-    return build(a.seed, a.out, a.allow_synthetic)
+    return build(a.seed, a.out, a.allow_synthetic, a.force)
 
 
 if __name__ == "__main__":
