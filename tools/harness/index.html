@@ -90,9 +90,8 @@
   };
 
   const HOSTS = ['chatgpt.com', 'claude.ai', 'gemini.google.com', 'localhost:5173'];
-  document.addEventListener('click', (e) => {
-    const fx = e.target.dataset && e.target.dataset.fx;
-    if (!fx) return;
+
+  function show(fx) {
     const ui = window.__AIRLOCK_UI__;
     if (fx === 'scanning') return ui.scanning({ modality: 'text' });
     if (fx === 'feed') {
@@ -115,7 +114,46 @@
       const v = fx === 'unavailable' ? UNAVAILABLE : FX[fx];
       ui.verdict(v, { payloadText: PAYLOAD, host: 'chatgpt.com', origin: 'https://chatgpt.com' });
     }, 320);
+  }
+
+  document.addEventListener('click', (e) => {
+    const fx = e.target.dataset && e.target.dataset.fx;
+    if (fx) show(fx);
   });
+
+  // Capture states, one URL each — for the submission screenshots (Phase 3, due to C
+  // by 15:40). Open the URL, wait for the page to settle, take the shot. No clicking,
+  // so every capture is framed identically run to run.
+  //
+  //   #block      block card, evidence span underlined
+  //   #evidence   same, with the scoreDetails tree expanded
+  //   #answer     the sanctioned answer streaming inside the card
+  //   #console    console panel open, 40 decisions in the feed
+  //   #slider     console open, threshold mid-drag at 0.42
+  //   #unavailable  the fail-closed card
+  const SHOTS = {
+    block:       () => show('block'),
+    unavailable: () => show('unavailable'),
+    evidence:    () => { show('block');
+                         setTimeout(() => { const d = window.__AIRLOCK_UI__.root.querySelector('details.sd');
+                                            if (d) d.open = true; }, 500); },
+    answer:      () => { show('block');
+                         setTimeout(() => window.__AIRLOCK_UI__.root.querySelector('.act-answer').click(), 500); },
+    console:     () => { show('feed');
+                         window.__AIRLOCK_UI__.root.querySelector('.panel').classList.remove('collapsed'); },
+    slider:      () => { show('feed');
+                         const r = window.__AIRLOCK_UI__.root;
+                         r.querySelector('.panel').classList.remove('collapsed');
+                         setTimeout(() => { const s = r.querySelector('.tau-range');
+                                            s.value = '0.42'; s.dispatchEvent(new Event('input')); }, 300); },
+  };
+
+  function applyHash() {
+    const fn = SHOTS[location.hash.replace('#', '')];
+    if (fn) setTimeout(fn, 250);       // let the fixtures finish loading
+  }
+  window.addEventListener('hashchange', () => location.reload());
+  applyHash();
 </script>
 </body>
 </html>
