@@ -35,13 +35,35 @@ def luhn(s):
     return t % 10 == 0
 
 
-# Stripe's published test PANs route to BENIGN by exclusion — Purview does the
-# same. Compared digits-only.
+# Published test PANs route to BENIGN by exclusion — Purview does the same.
+# Compared digits-only.
+#
+# T1-HIGH blocks with no model call, so a miss here is a false positive that NO
+# later tier can rescue and that lands straight in the reported FPR. C's
+# hard-negative bucket (bench/build_sensitive.py) keeps a deliberately
+# INDEPENDENT list and probes every entry — that independence caught
+# 4000000000000077 and ...93 missing from this set (INTEGRATION.md §9). Keep
+# the lists independent; widen this one whenever a probe fires.
 STRIPE_TEST_PANS = {
-    "4242424242424242", "4000056655665556", "5555555555554444",
-    "2223003122003222", "5200828282828210", "5105105105105100",
-    "378282246310005", "371449635398431", "6011111111111117",
-    "6011000990139424", "3056930009020004", "36227206271667",
+    # Visa
+    "4242424242424242", "4000056655665556", "4000000000000077",
+    "4000000000000093", "4000000000000002", "4000000000009995",
+    "4000000000009987", "4000000000000069", "4000000000000127",
+    "4000000000000119", "4000002500003155", "4000002760003184",
+    # NOT excluded, deliberately: 4111111111111111. It is widely published, but
+    # B verified and documented it blocking at T1-HIGH "as specified"
+    # (INTEGRATION-B.md) and may use it as a demo payload. Excluding it is a
+    # cross-owner behaviour change — raised in NOTES.md, not made unilaterally.
+    # Mastercard
+    "5555555555554444", "5200828282828210", "5105105105105100",
+    "2223003122003222",
+    # American Express
+    "378282246310005", "371449635398431",
+    # Discover
+    "6011111111111117", "6011000990139424",
+    # Diners Club
+    "3056930009020004", "3622720627891", "36227206271667",
+    # JCB / UnionPay
     "3566002020360505", "6200000000000005",
 }
 

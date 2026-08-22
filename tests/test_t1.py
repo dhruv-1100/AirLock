@@ -57,6 +57,29 @@ def test_pan_negatives(text):
     assert not (r.confidence == "HIGH" and r.label == "PAYMENT_CARD")
 
 
+def test_every_published_test_pan_is_excluded():
+    """One probe per published PAN — no sampling (INTEGRATION.md §9).
+
+    C's hard-negative bucket keeps an INDEPENDENT list on purpose; a random
+    3-of-N sample caught 4000000000000077 on one seed and missed it on the
+    next, and a green run gets believed. Every entry, every build.
+    """
+    for pan in sorted(t1.STRIPE_TEST_PANS):
+        r = t1.scan(f"my integration test uses card {pan} and returns card_declined")
+        assert r.confidence != "HIGH", (
+            f"{pan} is a published test card and must not auto-block at T1-HIGH")
+
+
+def test_exclusion_list_covers_C_independent_probe_set():
+    """C's corpus list is deliberately independent of this one. Any PAN it
+    probes that we do not exclude is a T1-HIGH false positive no tier can
+    rescue — the gap that INTEGRATION.md §9 found."""
+    from bench.build_sensitive import STRIPE_TEST_PANS as CORPUS_PANS
+    missing = [p for p in CORPUS_PANS
+               if t1.luhn(p) and p not in t1.STRIPE_TEST_PANS]
+    assert not missing, f"published PANs missing from t1.STRIPE_TEST_PANS: {missing}"
+
+
 def test_luhn():
     assert t1.luhn("4242424242424242")
     assert not t1.luhn("4242424242424241")
