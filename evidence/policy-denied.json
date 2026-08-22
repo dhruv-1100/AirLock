@@ -1,0 +1,14 @@
+{
+  "artifact": "beat 5 — OpenShell egress denial",
+  "captured_by": "openshell sandbox exec -n airlock -- curl -x $HTTPS_PROXY http://<host>/v1/models",
+  "sandbox": "airlock",
+  "proxy": "http://10.200.0.1:3128",
+  "note": "Deny-by-default. No allow rule names any cloud LLM host, so the proxy has nothing to match. Enforced outside the sandbox: network_policies are gateway state and code inside the sandbox cannot rewrite them.",
+  "denials": [
+    {"host": "api.openai.com", "status": 403, "body": {"detail": "GET api.openai.com:80/v1/models not permitted by policy", "error": "policy_denied"}},
+    {"host": "api.anthropic.com", "status": 403, "body": {"detail": "GET api.anthropic.com:80/v1/models not permitted by policy", "error": "policy_denied"}},
+    {"host": "generativelanguage.googleapis.com", "status": 403, "body": {"detail": "GET generativelanguage.googleapis.com:80/v1/models not permitted by policy", "error": "policy_denied"}},
+    {"host": "integrate.api.nvidia.com", "status": 403, "body": {"detail": "GET integrate.api.nvidia.com:80/v1/models not permitted by policy", "error": "policy_denied"}}
+  ],
+  "https_variant": "curl: (56) CONNECT tunnel failed, response 403"
+}

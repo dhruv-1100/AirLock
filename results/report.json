@@ -1,19 +1,18 @@
 {
   "n": 1000,
-  "false_pos": 53,
-  "fpr": 0.053,
+  "false_pos": 52,
+  "fpr": 0.052,
   "ci95": [
-    0.040747,
-    0.068675
+    0.039873,
+    0.067556
   ],
-  "p50_ms": 5928,
-  "p95_ms": 9203,
+  "p50_ms": 2,
+  "p95_ms": 4,
   "by_class": {
-    "HEALTH_RECORD": 5,
+    "HEALTH_RECORD": 6,
     "PROPRIETARY_CODE": 4,
     "LEGAL_HR": 18,
     "FINANCIAL_NONPUBLIC": 5,
-    "airlock_unavailable": 2,
     "PAYMENT_CARD": 7,
     "GOV_ID": 10,
     "CREDENTIAL": 2
@@ -21,7 +20,7 @@
   "threshold": 0.55,
   "seed": 1337,
   "corpus": "benign_v1.jsonl",
-  "wall_clock_s": 787.3,
+  "wall_clock_s": 344.7,
   "corpus_is_real": true,
   "note": null
 }

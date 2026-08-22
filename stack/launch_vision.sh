@@ -40,6 +40,12 @@ IMAGE="${AIRLOCK_VLM_IMAGE:-hellohal2064/vllm-dgx-spark-gb10}"
 # Left unset, the processor uses its own defaults. The pixel cap the SRS wanted is still
 # enforced, just client-side: B's shrinkToB64() downscales to a 1024 px long edge before
 # the payload ever leaves the tab, so the server never sees a full-resolution image.
+# The OpenShell gateway's Privacy Router runs in a container and resolves the host as
+# host.openshell.internal -> the docker bridge. A loopback-only publish is unreachable
+# from there, so `openshell inference set` fails verification and the sandbox has no
+# local model to route to. Publishing on the bridge as well keeps the listener off the
+# LAN — it is reachable only from containers on this box — while making the local-first
+# inference path actually work. Unset AIRLOCK_BRIDGE_IP to go back to loopback only.
 ENTRY=(${AIRLOCK_VLLM_ENTRY:-})
 EXTRA=(${AIRLOCK_VLLM_EXTRA:-})
 
@@ -48,6 +54,7 @@ bash "$(dirname "$0")/preflight.sh"
 
 docker run -d --name airlock-vision --gpus all \
   -p 127.0.0.1:8001:8001 \
+  ${AIRLOCK_BRIDGE_IP:+-p $AIRLOCK_BRIDGE_IP:8001:8001} \
   -v "${AIRLOCK_MODELS_DIR:-/mnt/data/models}:/models:ro" \
   -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
   ${AIRLOCK_FLASHINFER_MOE_FP4:+-e VLLM_USE_FLASHINFER_MOE_FP4=$AIRLOCK_FLASHINFER_MOE_FP4} \
