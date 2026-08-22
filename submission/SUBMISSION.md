@@ -97,6 +97,38 @@ not what was planned. The corpus is regenerable from one seeded command; full pe
 (`id, source, licence, sha256, char_len, provenance_url`) is in
 `data/benign_v1.manifest.json` and `data/ATTRIBUTION.md`.
 
+### Which tier resolved each paste — and what that does to the throughput numbers
+
+{{TIER_MIX_TABLE}}
+
+**We are stating this before anyone finds it.** Our benign corpus has a 200-character
+floor. The T0 fast path fires only below 40 characters. So **T0 cannot fire on this
+corpus by construction** — measured: 0 of 1000 items resolved at T0, and essentially the
+entire corpus escalated to the language model.
+
+That cuts two ways, and we report both:
+
+- **It makes the false-positive rate stronger, not weaker.** Every item reached the
+  classifier. Nothing was cheaply resolved by a length check before the model saw it. The
+  FPR above is measured entirely on the hard subset, which is the conservative direction.
+- **It makes our throughput figures unrepresentative.** Escalation rate, blended latency
+  (NFR-L8) and seats-per-box (NFR-T7) all scale with the fraction of pastes that reach a
+  model. Measured on a corpus that excludes short pastes entirely, those three numbers
+  describe a worst case, not a realistic deployment. **We do not claim the ~14%
+  escalation the design assumed.** Where those numbers appear below, they carry this
+  caveat.
+
+To show the fast path works rather than reporting one we never exercised, we ship a
+separate **T0 probe set** (`data/shortpaste_v1.jsonl`) of short benign pastes that do
+satisfy the gate. It is reported as its own line and is **never merged into the n=1000
+denominator**:
+
+{{T0_PROBE_RESULT}}
+
+A realistic paste distribution contains a great many short messages, so a deployed
+Airlock would resolve a substantial share at T0 for roughly a millisecond each. We have
+not measured that share on real traffic, and we do not assert it.
+
 ### Hand-adjudication of every false positive
 
 {{ADJUDICATION}}
