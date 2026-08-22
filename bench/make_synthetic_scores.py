@@ -29,13 +29,17 @@ def main():
 
     bitems = []
     for i in range(args.n):
-        # ~86% resolve deterministically at T0/T1 with p_block ≈ 0; the
-        # escalated tail gets a low-but-spread T2 posterior, with a handful of
-        # near-threshold items so the slider visibly changes FPR as it moves.
-        if rng.random() < 0.86:
+        # ~86% resolve deterministically at T0/T1 with p_block ≈ 0. The
+        # escalated tail spreads across the T2 posterior, and ~2% of ALL items
+        # land in 0.30–0.80 so the slider visibly trades FPR against recall as
+        # it moves (INTEGRATION-B.md: perfectly-separated scores look inert).
+        r = rng.random()
+        if r < 0.86:
             p, tier, ms = rng.uniform(0.0, 0.05), rng.choice(["T0", "T1"]), rng.randint(1, 12)
-        else:
+        elif r < 0.98:
             p, tier, ms = min(0.999, rng.betavariate(1.2, 8)), "T2", rng.randint(180, 550)
+        else:
+            p, tier, ms = rng.uniform(0.30, 0.80), "T2", rng.randint(180, 550)
         bitems.append({"_id": f"synthetic:{i:04d}", "source": "SYNTHETIC",
                        "sha256": "", "char_len": rng.randint(200, 4000),
                        "label": "BENIGN",
@@ -47,7 +51,10 @@ def main():
 
     sitems = []
     for i in range(args.n_sensitive):
-        p = max(0.0, min(0.999, rng.betavariate(8, 1.3)))
+        # ~8% of sensitive items score low (misses) so recall genuinely drops
+        # as tau rises — a slider with nothing to trade demonstrates nothing.
+        p = (rng.uniform(0.05, 0.50) if rng.random() < 0.08
+             else max(0.0, min(0.999, rng.betavariate(8, 1.3))))
         sitems.append({"_id": f"synthetic-s:{i:04d}", "source": "SYNTHETIC",
                        "sha256": "", "char_len": rng.randint(200, 4000),
                        "label": "SENSITIVE",

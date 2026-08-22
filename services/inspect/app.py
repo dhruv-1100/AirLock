@@ -121,8 +121,10 @@ async def healthz():
             "img_gate": {"seen": gate_img.seen_count,
                          "fast_passed": gate_img.fast_pass_count},
             "tiers": dict(_tier_counts),
+            # ERR = escalated to a model that failed closed — still escalation.
             "escalation_rate": round(
-                (_tier_counts.get("T2", 0) + _tier_counts.get("T3", 0))
+                (_tier_counts.get("T2", 0) + _tier_counts.get("T3", 0)
+                 + _tier_counts.get("ERR", 0))
                 / max(1, sum(_tier_counts.values())), 4)}
 
 
@@ -159,9 +161,14 @@ async def inspect(request: Request):
         try:
             return await asyncio.wait_for(_route(req, rid), TOTAL_BUDGET_S)
         except (asyncio.TimeoutError, httpx.TimeoutException):
+            # INTEGRATION-B.md §9: a fail-closed escalation IS an escalation —
+            # count it, or the rate reads 0% exactly while you are trying to
+            # work out whether the classifier is being reached.
+            _tier_counts["ERR"] = _tier_counts.get("ERR", 0) + 1
             return _err(504, "airlock_timeout",
                         "Upstream classifier exceeded budget — deny by default", rid)
         except Exception:
+            _tier_counts["ERR"] = _tier_counts.get("ERR", 0) + 1
             return _err(503, "airlock_unavailable",
                         "Inspector unreachable — deny by default", rid)
 
