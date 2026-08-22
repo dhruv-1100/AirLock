@@ -44,6 +44,18 @@ def test_ece_near_zero_when_calibrated():
 
 
 # --------------------------------------------------------------- ablation rows
+@pytest.fixture(autouse=True)
+def clean_router_state():
+    """The instant-block cache and tier counters are module-level, so without
+    this a payload cached by an earlier test replays as CACHE and the next
+    test silently measures the wrong tier — passing alone, failing in suite."""
+    app_mod._cache.clear()
+    app_mod._tier_counts.clear()
+    yield
+    app_mod._cache.clear()
+    app_mod._tier_counts.clear()
+
+
 @pytest.fixture
 def client():
     return TestClient(app_mod.app)
@@ -79,6 +91,31 @@ def test_full_row_unaffected(client, monkeypatch):
     monkeypatch.setattr(app_mod, "ABLATION", "full")
     v = _inspect(client, CRED).json()
     assert v["action"] == "block" and v["tier"] in ("T1", "CACHE")
+
+
+# -------------------------------------------------------------- tier_timings
+# B's contract: a stage that did not run is ABSENT. A 0 would light the stage
+# up as having run instantly, which inverts the point of the waterfall.
+def test_timings_omit_stages_that_did_not_run(client, monkeypatch):
+    monkeypatch.setattr(app_mod, "ABLATION", "full")
+    t = _inspect(client, "what is a monad").json()["tier_timings"]
+    assert set(t) == {"CACHE", "T0"}          # never reached T1/T2/T3
+    assert "T2" not in t and "T3" not in t
+
+
+def test_timings_stop_at_the_deciding_stage(client, monkeypatch):
+    monkeypatch.setattr(app_mod, "ABLATION", "full")
+    v = _inspect(client, "deploy key AKIAQYLPMN5HHHFPZSPQ now").json()
+    assert v["tier"] == "T1"
+    assert set(v["tier_timings"]) == {"CACHE", "T0", "T1"}   # no model call
+
+
+def test_cache_replay_reports_only_cache(client, monkeypatch):
+    monkeypatch.setattr(app_mod, "ABLATION", "full")
+    payload = "deploy key AKIAQYLPMN5HHHFPZSPQ twice"
+    _inspect(client, payload)
+    v = _inspect(client, payload).json()
+    assert v["tier"] == "CACHE" and set(v["tier_timings"]) == {"CACHE"}
 
 
 # ------------------------------------------------------------ synthetic scores

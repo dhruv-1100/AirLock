@@ -173,9 +173,41 @@ async def inspect(request: Request):
                         "Inspector unreachable — deny by default", rid)
 
 
+class Stages:
+    """Per-stage wall time for the overlay's cascade waterfall.
+
+    A stage that did not run is ABSENT, never 0 or null — a zero would light
+    the stage up as having run instantly, which inverts the whole point ("no
+    model was called"). The deciding stage is the existing `tier` field.
+    """
+
+    def __init__(self):
+        self._t = {}
+
+    def mark(self, stage, seconds):
+        self._t[stage] = round(seconds * 1000, 2)
+
+    def timed(self, stage):
+        stages = self
+
+        class _Timer:
+            def __enter__(self):
+                self.t0 = time.monotonic()
+                return self
+
+            def __exit__(self, *exc):
+                stages.mark(stage, time.monotonic() - self.t0)
+                return False
+
+        return _Timer()
+
+    def as_dict(self):
+        return dict(self._t)
+
+
 def _respond(rid, *, action, label, severity, reason, spans, verified, p_block,
              threshold, tier, model, modality, t_start, score_details=None,
-             clause_id=None):
+             clause_id=None, stages=None, extracted_text=None):
     clause_id = clause_id or LABEL_TO_CLAUSE.get(label, "NONE")
     body = verdict_body(
         request_id=rid, action=action, label=label, severity=severity,
@@ -184,6 +216,12 @@ def _respond(rid, *, action, label, severity, reason, spans, verified, p_block,
         p_block=round(p_block, 4), threshold=threshold, tier=tier, model=model,
         modality=modality, latency_ms=int((time.monotonic() - t_start) * 1000),
         decision_id=uuid.uuid4().hex[:24], score_details=score_details)
+    if stages:
+        body["tier_timings"] = stages.as_dict()
+    if extracted_text:
+        # What the VLM actually read off the image, verbatim, so the overlay
+        # can show the transcript rather than assert a conclusion.
+        body["extracted_text"] = extracted_text
     return body
 
 
@@ -213,6 +251,7 @@ async def _finish(body, key, *, origin="", text="", n_images=0, cache=False):
 
 async def _route(req, rid):
     t_start = time.monotonic()
+    stages = Stages()
     text = req.get("text") or ""
     origin = req.get("origin") or ""
     images = req.get("images") or []
@@ -225,11 +264,14 @@ async def _route(req, rid):
         return "warn" if audit_only else "block"
 
     # ---- CACHE — sha256 replay, ~1 ms: in-process first, then Mongo -------
+    t_cache = time.monotonic()
     key = hashlib.sha256(
         (text + "".join(im.get("b64", "") for im in images)).encode()).hexdigest()
     hit = _cache.get(key) if ABLATION == "full" else None
     if hit:
+        stages.mark("CACHE", time.monotonic() - t_cache)
         hit = dict(hit)
+        hit["tier_timings"] = stages.as_dict()
         hit.update(request_id=rid, tier="CACHE",
                    latency_ms=int((time.monotonic() - t_start) * 1000))
         return JSONResponse(hit)
@@ -237,6 +279,7 @@ async def _route(req, rid):
         # Mongo decisions doc → verdict body (fields differ; binaries dropped).
         doc = await mongo.get_by_hash(key)
         if doc:
+            stages.mark("CACHE", time.monotonic() - t_cache)
             blocked = doc.get("verdict") == "BLOCK"
             clause_id = doc.get("clause_id", "NONE")
             body = _respond(
@@ -252,24 +295,29 @@ async def _route(req, rid):
                 threshold=threshold, tier="CACHE", model="cache",
                 modality=modality, t_start=t_start,
                 score_details=doc.get("score_details"),
-                clause_id=clause_id)
+                clause_id=clause_id, stages=stages)
             return await _finish(body, key, origin=origin,
                                  n_images=len(images))
+
+    stages.mark("CACHE", time.monotonic() - t_cache)
 
     # ---- T3 — image path: cheap gate → VLM transcribe+classify → ground ---
     if images:
         im = images[0]
-        gate = gate_img.inspect_image(im["b64"])
+        with stages.timed("GATE_IMG"):
+            gate = gate_img.inspect_image(im["b64"])
         if gate.fast_pass:
             # One-sided: the gate may only fast-pass, never block.
             body = _respond(
                 rid, action="allow", label="BENIGN", severity="NONE",
                 reason="Pre-VLM gate: natural image, no text-like structure",
                 spans=[], verified=True, p_block=0.0, threshold=threshold,
-                tier="T3", model="gate_img", modality="image", t_start=t_start)
+                tier="T3", model="gate_img", modality="image", t_start=t_start,
+                stages=stages)
             return await _finish(body, key, origin=origin, n_images=1)
-        verdict, model = await t3.classify_image(im["b64"],
-                                                 im.get("mime", "image/jpeg"))
+        with stages.timed("T3"):
+            verdict, model = await t3.classify_image(
+                im["b64"], im.get("mime", "image/jpeg"))
         verdict, ocr_text = t3.ground(verdict)
         verdict = verify(verdict, ocr_text + "\n" + text)
         # §6.4: re-run T1 on the OCR text — a screenshotted credential or PAN
@@ -281,7 +329,8 @@ async def _route(req, rid):
                 reason=f"Deterministic detector on transcription: {t1_ocr.detector}",
                 spans=t1_ocr.evidence_spans, verified=True, p_block=1.0,
                 threshold=threshold, tier="T3", model="airlock-vision+t1",
-                modality="image", t_start=t_start)
+                modality="image", t_start=t_start, stages=stages,
+                extracted_text=verdict.get("extracted_text"))
             return await _finish(body, key, origin=origin, text=ocr_text,
                                  n_images=1, cache=True)
         label = verdict["label"]
@@ -303,29 +352,33 @@ async def _route(req, rid):
             p_block=p_block, threshold=threshold, tier="T3",
             model=f"airlock-vision/{model}", modality="image",
             t_start=t_start,
-            clause_id=verdict.get("policy_clause_id") if blocked else "NONE")
+            clause_id=verdict.get("policy_clause_id") if blocked else "NONE",
+            stages=stages, extracted_text=verdict.get("extracted_text"))
         return await _finish(body, key, origin=origin, text=ocr_text,
                              n_images=1, cache=True)
 
     # ---- T0 — trivial gate ------------------------------------------------
-    if (modality == "text" and t0.is_trivial(text)
-            and ABLATION not in ("t2_noverify", "t2_verify")):
+    t_t0 = time.monotonic()
+    _trivial = modality == "text" and t0.is_trivial(text)
+    stages.mark("T0", time.monotonic() - t_t0)
+    if _trivial and ABLATION not in ("t2_noverify", "t2_verify"):
         body = _respond(
             rid, action="allow", label="BENIGN", severity="NONE",
             reason="Trivial payload", spans=[], verified=True, p_block=0.0,
             threshold=threshold, tier="T0", model="none", modality=modality,
-            t_start=t_start)
+            t_start=t_start, stages=stages)
         return await _finish(body, key, origin=origin, text=text)
 
     # ---- T1 — deterministic scan ------------------------------------------
-    scan = t1.scan(text)
+    with stages.timed("T1"):
+        scan = t1.scan(text)
     if scan.confidence == "HIGH" and ABLATION not in ("t2_noverify", "t2_verify"):
         body = _respond(
             rid, action=block_action(), label=scan.label, severity="HIGH",
             reason=f"Deterministic detector: {scan.detector}",
             spans=scan.evidence_spans, verified=True, p_block=1.0,
             threshold=threshold, tier="T1" if modality == "text" else "T3",
-            model="none", modality=modality, t_start=t_start)
+            model="none", modality=modality, t_start=t_start, stages=stages)
         return await _finish(body, key, origin=origin, text=text, cache=True)
 
     if ABLATION == "t1_only":
@@ -334,11 +387,13 @@ async def _route(req, rid):
             rid, action="allow", label="BENIGN", severity="NONE",
             reason=f"T1-only ablation; hints suppressed: {scan.hints}",
             spans=[], verified=True, p_block=0.0, threshold=threshold,
-            tier="T1", model="none", modality=modality, t_start=t_start)
+            tier="T1", model="none", modality=modality, t_start=t_start,
+            stages=stages)
         return await _finish(body, key, origin=origin, text=text)
 
     # ---- T2 — LLM classifier, guided JSON, span-verified ------------------
-    verdict, logprobs, model = await t2.classify(text, hints=scan.hints or None)
+    with stages.timed("T2"):
+        verdict, logprobs, model = await t2.classify(text, hints=scan.hints or None)
     if ABLATION != "t2_noverify":  # row 2 measures the cost of skipping this
         verdict = verify(verdict, text)
     p_block = p_block_from_logprobs(logprobs, verdict)
@@ -356,7 +411,8 @@ async def _route(req, rid):
         p_block=p_block, threshold=threshold,
         tier="T2" if modality == "text" else "T3",
         model=f"airlock-clf/{model}", modality=modality, t_start=t_start,
-        clause_id=verdict.get("policy_clause_id") if blocked else "NONE")
+        clause_id=verdict.get("policy_clause_id") if blocked else "NONE",
+        stages=stages)
     if req.get("debug_label_logits"):
         # Harness-only (bench/fit_calibration.py): raw label logits so the
         # temperature sweep is offline. Never set by the extension.
