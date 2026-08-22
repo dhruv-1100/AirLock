@@ -182,8 +182,9 @@
   button.primary:hover { background: rgba(110,168,254,.26); }
   button.ghost { margin-left: auto; opacity: .65; }
   button[disabled] { opacity: .45; cursor: default; }
-  .ok-note { margin-top: 10px; font-size: 12px; color: #4ade80; display: none; }
+  .ok-note { margin-top: 10px; font-size: 12px; color: #4ade80; display: none; line-height: 1.5; }
   .ok-note.on { display: block; }
+  .ok-note.warn { color: #fcd34d; }
   `;
 
   // The host has to survive at document_start, before <body> exists.
@@ -437,13 +438,28 @@
     }).then((res) => {
       const note = $card.querySelector('.ok-note');
       note.classList.add('on');
-      note.textContent = res && res.ok
-        ? 'Written back to policy_corpus as an analyst override' +
+      // `ok:true, embedded:false` is the MONGO_ENABLED=false no-op path. Saying
+      // "written back to policy_corpus" there would be a claim the system did not
+      // earn, on the one beat whose whole point is that the write-back is real.
+      if (res && res.ok && res.embedded) {
+        note.classList.remove('warn');
+        note.textContent = 'Written back to policy_corpus as an analyst override' +
           (res.corpus_id ? ' (' + res.corpus_id + ')' : '') +
-          ' — this exact shape will pass next time; a near neighbour still blocks. No retraining.'
-        : 'Write-back failed — the inspector did not accept the override.';
-      btn.textContent = res && res.ok ? 'Marked benign' : 'Retry';
-      btn.disabled = !(res && res.ok);
+          ' — this exact shape will pass next time; a near neighbour still blocks. No retraining.';
+        btn.textContent = 'Marked benign';
+        btn.disabled = true;
+      } else if (res && res.ok) {
+        note.classList.add('warn');
+        note.textContent = 'Override recorded, but NOT embedded — persistence is disabled ' +
+          'on this process (MONGO_ENABLED=false). Nothing was written to policy_corpus.';
+        btn.textContent = 'Marked benign (not persisted)';
+        btn.disabled = true;
+      } else {
+        note.classList.add('warn');
+        note.textContent = 'Write-back failed — the inspector did not accept the override.';
+        btn.textContent = 'Retry';
+        btn.disabled = false;
+      }
     });
   }
 

@@ -17,6 +17,13 @@ const BASE = 'http://127.0.0.1:8787';
 const WS_URL = 'ws://127.0.0.1:8787/v1/stream';
 const INSPECT_TIMEOUT_MS = 2500;
 
+// vLLM Prometheus endpoints. Read-only GETs — B and C consume :8000/:8001 over HTTP
+// only, and never start, stop or restart a GPU process (NFR-S1).
+const METRICS = {
+  kv_cache_text:   'http://127.0.0.1:8000/metrics',
+  kv_cache_vision: 'http://127.0.0.1:8001/metrics',
+};
+
 // ---------------------------------------------------------------- fail-closed body
 function denied(reason, requestId, code) {
   return {
@@ -173,20 +180,74 @@ chrome.runtime.onConnect.addListener((port) => {
   ports.add(port);
   port.onDisconnect.addListener(() => {
     ports.delete(port);
-    if (ports.size === 0) closeStream();
+    if (ports.size === 0) { closeStream(); stopMetrics(); }
   });
   port.onMessage.addListener((msg) => {
     if (!msg) return;
     if (msg.type === 'ANSWER') streamAnswer(port, msg);
-    if (msg.type === 'STREAM_ON') openStream();
+    if (msg.type === 'STREAM_ON') { openStream(); startMetrics(); }
   });
   openStream();
+  startMetrics();
 });
 
 function fanout(frame) {
   for (const p of ports) {
     try { p.postMessage({ type: 'WS', frame }); } catch (_) { ports.delete(p); }
   }
+}
+
+// ------------------------------------------------------------------ KV cache gauges
+// The server-side ConsoleHub can emit {"type":"metric"} frames, but nothing currently
+// calls its set_metric() — so left alone the gauges sit at "—" all day. Scrape the two
+// vLLM /metrics endpoints ourselves instead. If a real server metric frame ever shows
+// up we stand down within 6 s and let it win, so this never fights the server.
+let lastServerMetricAt = 0;
+let metricTimer = null;
+
+// vLLM renamed this counter: newer builds expose vllm:kv_cache_usage_perc, older ones
+// vllm:gpu_cache_usage_perc. Accept either. The box's live :8000 reports the former.
+const KV_RE = /^vllm:(?:kv|gpu)_cache_usage_perc\{[^}]*\}\s+([0-9.eE+-]+)/m;
+
+async function scrapeKV(url) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 800);
+  try {
+    const res = await fetch(url, { signal: ac.signal, cache: 'no-store', credentials: 'omit' });
+    if (!res.ok) return null;
+    const m = KV_RE.exec(await res.text());
+    if (!m) return null;
+    const v = Number(m[1]);
+    return Number.isFinite(v) ? v : null;
+  } catch (_) {
+    return null;                 // server not up, or not this one's turn today
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function pollMetrics() {
+  if (ports.size === 0) return;
+  if (Date.now() - lastServerMetricAt < 6000) return;   // the server is doing it
+  const [text, vision] = await Promise.all([
+    scrapeKV(METRICS.kv_cache_text),
+    scrapeKV(METRICS.kv_cache_vision),
+  ]);
+  const kv = {};
+  if (text !== null) kv.kv_cache_text = text;
+  if (vision !== null) kv.kv_cache_vision = vision;
+  if (Object.keys(kv).length) fanout({ type: 'metric', kv, src: 'scrape' });
+}
+
+function startMetrics() {
+  if (metricTimer) return;
+  metricTimer = setInterval(pollMetrics, 2000);
+  pollMetrics();
+}
+
+function stopMetrics() {
+  clearInterval(metricTimer);
+  metricTimer = null;
 }
 
 let ws = null;
@@ -207,6 +268,7 @@ function openStream() {
   ws.onmessage = (ev) => {
     let frame = null;
     try { frame = JSON.parse(ev.data); } catch (_) { return; }
+    if (frame && frame.type === 'metric' && frame.src !== 'scrape') lastServerMetricAt = Date.now();
     fanout(frame);
   };
   ws.onclose = () => { fanout({ type: 'ws_state', state: 'closed' }); scheduleReconnect(); };
@@ -254,6 +316,13 @@ async function streamAnswer(port, msg) {
         if (data === '[DONE]') { port.postMessage({ type: 'ANSWER_DONE', rid }); return; }
         try {
           const j = JSON.parse(data);
+          // A's /v1/answer emits an airlock.error.v1 object inside a data frame when
+          // :8000 is unreachable — no `choices` at all. Without this branch the panel
+          // just stops mid-sentence and the operator has nothing to look at.
+          if (j && j.error) {
+            port.postMessage({ type: 'ANSWER_ERROR', rid, error: j.reason || j.label || j.error });
+            return;
+          }
           const delta = j.choices && j.choices[0] && j.choices[0].delta;
           const text = (delta && delta.content) || '';
           if (text) port.postMessage({ type: 'ANSWER_DELTA', rid, text });

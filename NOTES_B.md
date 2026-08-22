@@ -6,6 +6,16 @@ bare `python` that imports torch, MongoDB indexes, or the policy artifact (NFR-S
 
 Contract is `CONTRACT.md`, frozen. Everything below conforms to it.
 
+**Phase status.** Phases 0–3 of B's column are complete as code. What is *not* done is
+the part that needs the actual box and a human at the keyboard: the `chrome://version`
+check and G1-B load-unpacked (Phase 0 items 1, 7, 8), the final-quality screenshots for
+C (Phase 3 item 6 — states are pre-wired, see below), and Phases 4–5, which are dress
+runs and demo freeze rather than files.
+
+**Reconciled against `main`** — see `INTEGRATION-B.md` for the six client-side fixes
+found by running against A's real `services/inspect/app.py`, the worst of which was the
+console silently dropping its entire backfill.
+
 ---
 
 ## Run it
@@ -33,6 +43,25 @@ Load the extension: `chrome://extensions` → Developer mode → Load unpacked �
 that DevTools window open all day. Content-script logs go to the *page* console; SW
 logs go to that one. Two consoles — this trips people up every single time.
 
+### Screenshots for the submission
+
+The capture states are pre-wired as URL hashes on the harness, so each shot is one URL
+and no clicking — framing is identical run to run:
+
+| URL | Shot |
+|---|---|
+| `…/tools/harness/#block` | block card, evidence span underlined |
+| `…/tools/harness/#evidence` | same with the `scoreDetails` tree expanded |
+| `…/tools/harness/#answer` | sanctioned answer streaming inside the card |
+| `…/tools/harness/#console` | console panel open, 40 decisions in the feed |
+| `…/tools/harness/#slider` | console open, threshold mid-drag at 0.42 |
+| `…/tools/harness/#unavailable` | the fail-closed card |
+
+Take these from the real Chrome you are demoing in — that is the honest source for a
+submission screenshot, and it costs about two minutes. **Do not ship the slider shot
+until `results/scores_benign.json` is a real run**; the console labels it PLACEHOLDER on
+purpose and that label is in the frame.
+
 ### Styling the overlay without reloading the extension
 
 ```bash
@@ -56,7 +85,7 @@ orphaned content scripts.
 | `extension/console.js` | The in-page live console panel, bottom-left, collapsible. Threshold slider, mode dropdown, KV gauges, lockdown toggle. |
 | `extension/sw.js` | The only thing that touches the network. `/v1/inspect`, the WebSocket, the SSE relay, the `declarativeNetRequest` lockdown rule. |
 | `extension/mainworld.js` | MAIN-world `fetch` patch. **Stretch — cut at 16:00 without hesitation if anything else is amber.** |
-| `extension/scores_benign.json` | **PLACEHOLDER.** Shape only. Overwrite with `results/scores_benign.json` the moment A produces it. The console labels it as a placeholder until you do. |
+| `extension/scores_benign.json` | Copy of `results/scores_benign.json`. Currently the synthetic file from `bench/make_synthetic_scores.py`, which self-declares `corpus_is_real: false` — both consoles keep the PLACEHOLDER label until a real harness run flips that flag. Re-copy after every real run. |
 | `web/replica/` | `localhost:5173`. Beat 4's stage. |
 | `web/console/` | `localhost:5174`. Standalone projector console — works with no extension at all. |
 | `tools/stub_inspect.py` | B's inspector. Full contract: inspect, healthz, policy, decisions, feedback, report, SSE answer, WebSocket stream, CORS with `Access-Control-Allow-Private-Network`. |
@@ -85,6 +114,26 @@ orphaned content scripts.
    with `setNativeValue()` (prototype setter + `input` event) as the fallback.
 5. **Bind to `document`, never to a selector.** ProseMirror and Lexical rebuild their
    nodes constantly; a selector-bound listener ends up on a node that no longer exists.
+
+## When the console feed is dead, check this first
+
+The console renders, backfills 50 rows over HTTP, and then never updates again. The
+instinct is to go debug the change stream, the resume token or Mongo. Check uvicorn's
+WebSocket support before any of that (INTEGRATION.md §7): if `websockets` was not
+installed **at the moment uvicorn started**, uvicorn picks its no-op WebSocket
+implementation and every upgrade request 404s while every HTTP route keeps working.
+
+```bash
+python -c "import websockets; print(websockets.__version__)"
+```
+
+Installing it under a running server changes nothing — **restart uvicorn**. A healthy
+connect sends `{"type":"hello","policy_version":"policy_v1","resume":null}` as the first
+frame; you can see it in the service-worker DevTools window.
+
+Second thing to check, and it is a B-side thing: both consoles scrape `:8000`/`:8001`
+`/metrics` themselves for the KV gauges, because nothing calls `ConsoleHub.set_metric()`.
+A gauge reading "—" means that vLLM server is not up, not that the console is broken.
 
 ## Fail-closed, everywhere
 
