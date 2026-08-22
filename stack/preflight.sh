@@ -50,4 +50,5 @@ fi
 echo
 echo "=== CLEAR TO LAUNCH. Whiteboard rules (NFR-S1/S3): ==="
 echo "  - write the new summed --gpu-memory-utilization BEFORE launching"
-echo "  - committed demo total 0.64 | hard ceiling 0.85 | text .40 vision .24 clf .09"
+echo "  - committed demo total 0.68 | hard ceiling 0.85 | text .40 vision .28"
+echo "  - two-server config: T2 classification runs ON :8000 (see stack/models.env)"

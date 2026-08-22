@@ -24,6 +24,9 @@ def main():
     ap.add_argument("--n-sensitive", type=int, default=400)
     ap.add_argument("--threshold", type=float, default=0.55)
     ap.add_argument("--seed", type=int, default=1337)
+    ap.add_argument("--out", default=None,
+                    help="output path (default results/scores_benign.json); "
+                         "tests MUST pass this — never clobber the team file")
     args = ap.parse_args()
     rng = random.Random(args.seed)
 
@@ -66,8 +69,9 @@ def main():
                        "evidence_spans": [], "evidence_verified": True,
                        "override": None, "http_status": 200})
 
-    (ROOT / "results").mkdir(exist_ok=True)
-    (ROOT / "results" / "scores_benign.json").write_text(json.dumps({
+    out = Path(args.out) if args.out else ROOT / "results" / "scores_benign.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({
         "benign": [r["p_block"] for r in bitems],
         "sensitive": [r["p_block"] for r in sitems],
         "threshold_default": args.threshold,
@@ -76,7 +80,7 @@ def main():
         "_note": "SYNTHETIC — shape fixture for B's slider. NOT a reportable run.",
         "items": bitems}, indent=1))
     fp = sum(1 for r in bitems if r["verdict"] == "BLOCK")
-    print(f"results/scores_benign.json: {len(bitems)} benign "
+    print(f"{out}: {len(bitems)} benign "
           f"({fp} above tau={args.threshold}), {len(sitems)} sensitive, "
           f"corpus_is_real=false")
 
