@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "defaultSandbox": "my-qwen-claw",
+  "liveInference": null,
+  "gatewayHealth": {
+    "healthy": false,
+    "state": "missing_named",
+    "reason": "named gateway not configured"
+  },
+  "sandboxes": [
+    {
+      "name": "my-qwen-claw",
+      "model": "qwen3-30b-local:latest",
+      "provider": "ollama-local",
+      "gpuEnabled": false,
+      "hostGpuDetected": true,
+      "sandboxGpuEnabled": false,
+      "sandboxGpuMode": "0",
+      "sandboxGpuDevice": null,
+      "openshellDriver": "docker",
+      "openshellVersion": "0.0.44",
+      "policies": [
+        "npm",
+        "pypi",
+        "huggingface",
+        "brew",
+        "weather",
+        "local-inference",
+        "openclaw-pricing"
+      ],
+      "agent": null,
+      "dashboardPort": 18789,
+      "isDefault": true
+    }
+  ],
+  "services": [
+    {
+      "name": "cloudflared",
+      "running": false,
+      "pid": null
+    }
+  ]
+}

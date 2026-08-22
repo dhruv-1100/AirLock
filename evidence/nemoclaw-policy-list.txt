@@ -1,0 +1,29 @@
+
+  Policy presets for sandbox 'my-qwen-claw':
+    ○ brave — Brave Search API access
+    ● brew — Homebrew (Linuxbrew) package manager access (brew binary preinstalled in base image)
+    ○ claude-code — Claude Code API, telemetry, and crash-report access
+    ○ discord — Discord API, gateway, and CDN access
+    ○ github — GitHub.com and GitHub API access (git)
+    ● huggingface — Hugging Face Hub, LFS, and Inference API access
+    ○ jira — Jira and Atlassian Cloud access
+    ● local-inference — Local inference access (Ollama, vLLM) via host gateway
+    ○ nous-audio — Nous Portal managed audio generation and transcription gateway
+    ○ nous-browser — Nous Portal managed browser automation gateway
+    ○ nous-code — Nous Portal managed sandboxed code execution gateway
+    ○ nous-image — Nous Portal managed image generation gateway
+    ○ nous-web — Nous Portal managed web search and crawl gateway
+    ● npm — npm and Yarn registry access
+    ○ openclaw-diagnostics-otel-local — OpenClaw diagnostics OTLP/HTTP export to local host collector
+    ● openclaw-pricing — OpenClaw model-pricing reference fetch (LiteLLM + OpenRouter)
+    ○ outlook — Microsoft Outlook and Graph API access
+    ○ public-reference — Read-only structured public reference APIs
+    ● pypi — Python Package Index (PyPI) access
+    ○ slack — Slack API, Socket Mode, and webhooks access
+    ○ telegram — Telegram Bot API access
+    ● weather — Read-only public weather, geocoding, and alert APIs
+    ○ wechat — WeChat (personal) iLink API access (OpenClaw + Hermes)
+    ○ whatsapp — WhatsApp Web WebSocket and media access
+
+  ⚠ Could not query gateway — showing local state only.
+
