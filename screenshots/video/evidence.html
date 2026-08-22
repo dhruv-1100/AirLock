@@ -1,0 +1,36 @@
+<!doctype html><meta charset=utf-8><style>
+ html,body{margin:0;height:100%;background:#0b0c0f;color:#d7dbe0;
+   font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+ .wrap{padding:44px 60px}
+ h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+ h1 span{color:#8a939d;font-weight:400}
+ h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#7d868f;margin:30px 0 10px}
+ pre{margin:0;padding:16px 20px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);
+   border-radius:10px;font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
+   white-space:pre-wrap;color:#c3cad2}
+ .red{color:#f87171} .grn{color:#4ade80}
+ .note{margin-top:14px;color:#8a939d;font-size:13.5px;max-width:1150px}
+</style><div class=wrap>
+<h1>Policy-enforced, not asserted <span>· OpenShell egress + Rule 02</span></h1>
+<h2>Every cloud LLM host, from inside the sandbox</h2>
+<pre>--- api.openai.com ---
+{&quot;detail&quot;:&quot;GET api.openai.com:80/v1/models not permitted by policy&quot;,&quot;error&quot;:&quot;policy_denied&quot;}
+--- api.anthropic.com ---
+{&quot;detail&quot;:&quot;GET api.anthropic.com:80/v1/models not permitted by policy&quot;,&quot;error&quot;:&quot;policy_denied&quot;}
+--- generativelanguage.googleapis.com ---
+{&quot;detail&quot;:&quot;GET generativelanguage.googleapis.com:80/v1/models not permitted by policy&quot;,&quot;error&quot;:&quot;policy_denied&quot;}
+--- integrate.api.nvidia.com ---
+{&quot;detail&quot;:&quot;GET integrate.api.nvidia.com:80/v1/models not permitted by policy&quot;,&quot;error&quot;:&quot;policy_denied&quot;}</pre>
+<h2>Every inference request, and where it was routed</h2>
+<pre>$ grep -oE &#x27;endpoint=[^ ]+&#x27; evidence/openshell-ocsf.*.log | sort | uniq -c
+
+            4 endpoint=http://172.17.0.1:8000/v1
+
+  ONE endpoint. It is 172.17.0.1:8000 — the docker-bridge address of the vLLM
+  serving Nemotron-3.5-Lightning-30B-A3B-NVFP4 from local weights on this box.
+  Zero cloud providers. Zero other endpoints.</pre>
+<div class=note>Deny-by-default: no allow rule names any cloud LLM host, so the proxy has nothing to match.
+Enforced at the proxy, outside the sandbox — <b>network_policies are gateway state and code inside the
+sandbox cannot rewrite them</b>. The honest limit: these layers govern the sandbox. The host-side
+classifier binds 127.0.0.1, links no cloud SDK, and reports bytes_egressed: 0 — the unplug is its proof.</div>
+</div>
