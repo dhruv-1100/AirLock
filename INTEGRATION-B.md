@@ -436,6 +436,54 @@ query string.
 
 ---
 
+# Round 7 — A shipped all three; verified live
+
+`d352901`. Checked against a running `services/inspect/app.py`, not read.
+
+**§14 `4111111111111111` — excluded, confirmed.** Now escalates instead of blocking at
+T1-HIGH: `use test card 4111111111111111 in the sandbox integration test` →
+`503 airlock_unavailable` (T2 unreachable, fail-closed), where it previously returned a
+`PAYMENT_CARD` block. With the classifier up it will reach T2 like any other payload.
+
+**§15 `tier_timings` — shipped, and the omit-don't-zero contract was honoured.** A's
+`Stages` helper documents it in the class docstring. Real payloads off the box:
+
+```
+T0 allow    tier_timings {"CACHE":0.02,"T0":0.0}
+T1 block    tier_timings {"CACHE":0.01,"T0":0.0,"T1":0.07}
+```
+
+T1/T2/T3 and T2/T3 respectively are **absent**, not zero. Exactly right.
+
+### 17. Key-case mismatch — fixed on B's side, no action needed
+
+B's proposal used `{"cache":…}` lowercase; A shipped `{"CACHE":…}` uppercase. B's strip
+matched case-sensitively, so **the cache cell read "not run" on a decision that had in
+fact hit it** — a silently wrong cell, which is worse than a missing one. B's fault for
+writing the contract as an example rather than as a rule.
+
+Fixed by case-folding the keys on read. Verified against both spellings and against A's
+two real payloads:
+
+```
+A's T0 real   CACHE:0.02ms[ran]  T0:0ms[resolved]  T1:not run  T2:not run  T3:not run
+A's T1 real   CACHE:0.01ms[ran]  T0:0ms[ran]  T1:0.07ms[resolved]  T2:not run  T3:not run
+escalated     CACHE  T0  T1:0.42ms[ran]  T2:312ms[MODEL]  T3:not run
+lowercase     CACHE:0.4ms[ran]  T0:0.01ms[ran]  T1:0.3ms[resolved]  …
+```
+
+Note `T0: 0.0` is a **legitimate** value — a sub-microsecond gate that rounds to zero. It
+renders as `0.00 ms` with the stage lit, because it did run. Presence is what decides,
+never the value.
+
+**§16 `extracted_text` — shipped** (`app.py:221`, passed through on both the T3 and the
+grounded-override paths). B's level-2 image renderer picks it up with no change: the
+image, the model's own transcript beneath it, markers underlined in the transcript.
+Cannot be exercised end to end until `:8001` is up — the harness covers it at
+`#image-ocr` in the meantime.
+
+---
+
 ## Still open, owned elsewhere
 
 - `results/scores_benign.json` is the synthetic file from `bench/make_synthetic_scores.py`
