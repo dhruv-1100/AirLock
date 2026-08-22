@@ -293,6 +293,14 @@ async function health() {
     // The override count is worth showing: it is the span-verification fail-open, the
     // one place the detector is allowed to let something through, and the SRS asks for
     // it as a rate rather than a vibe.
+    // A exposes escalation_rate on /healthz (NFR-T6) rather than as a metric frame —
+    // nothing broadcasts one. Read it off the health poll so the figure has a source.
+    if (typeof h.escalation_rate === 'number') {
+      $('esc').textContent = (h.escalation_rate * 100).toFixed(0) + '%';
+      $('esc').title = h.tiers
+        ? Object.entries(h.tiers).map(([k, v]) => `${k}:${v}`).join('  ')
+        : '';
+    }
     const extra = [];
     if (h.overrides != null) extra.push(`overrides ${h.overrides}`);
     if (h.img_gate && h.img_gate.seen) {
@@ -346,6 +354,7 @@ function paintKV(kv) {
     $('kvV').textContent = (kv.kv_cache_vision * 100).toFixed(1) + '%';
     $('kvVf').style.width = Math.min(100, kv.kv_cache_vision * 100) + '%';
   }
+  // Only if a server frame actually carries it — /healthz is the primary source.
   if (typeof kv.escalation_rate === 'number') {
     $('esc').textContent = (kv.escalation_rate * 100).toFixed(0) + '%';
   }

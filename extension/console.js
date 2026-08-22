@@ -351,6 +351,12 @@
                     `mongo ${h.mongo ? '✓' : '✗'}`, `up ${h.uptime_s || 0}s`];
       // The span-verification override count is the one deliberate fail-open in the
       // system. Showing it costs a tooltip and buys the right to call it a mechanism.
+      // NFR-T6 escalation rate lives on /healthz, not in a metric frame — nothing
+      // broadcasts one. Without this the console's escalation figure stays "—".
+      if (typeof h.escalation_rate === 'number') {
+        $('.esc').textContent = (h.escalation_rate * 100).toFixed(0) + '%';
+        if (h.tiers) $('.shared').title = Object.entries(h.tiers).map(([k, v]) => `${k}:${v}`).join('  ');
+      }
       if (h.overrides != null) bits.push(`span overrides ${h.overrides}`);
       if (h.img_gate && h.img_gate.seen) {
         bits.push(`img fast-pass ${Math.round(h.img_gate.fast_passed / h.img_gate.seen * 100)}%`);
@@ -387,6 +393,14 @@
     });
 
     loadScores();
+    // Re-poll every 5 s: escalation rate, override count and the image fast-pass rate
+    // all move as pastes come in, and a figure frozen at boot is worse than none.
+    setInterval(() => net.health().then((h) => {
+      if (!h) return;
+      if (typeof h.escalation_rate === 'number') {
+        $('.esc').textContent = (h.escalation_rate * 100).toFixed(0) + '%';
+      }
+    }), 5000);
   }
   boot();
 })();

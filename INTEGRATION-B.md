@@ -113,10 +113,51 @@ a false claim on the one beat whose entire point is that the write-back is real.
 classifier is not up, and the router fails closed. `4111111111111111` blocks at T1 with
 `confidence:"HIGH"` as specified. A's detector is behaving to spec — do not "fix" this.
 
+---
+
+# Round 2 — after A's `71081bf`
+
+A closed both of the items that were open above: `write_metric()` now has a caller in
+`_finish()`, and `escalation_rate` + a `tiers` breakdown are exposed on `/healthz`.
+
+## 8. The console read `escalation_rate` from the wrong place — fixed on B's side
+
+A publishes it on `/healthz`. B's consoles were only looking for it inside a
+`{"type":"metric"}` WebSocket frame, which nothing broadcasts — so the figure stayed "—"
+even though the server had it. **Fixed:** both consoles now read `escalation_rate` (and
+the `tiers` breakdown, as a tooltip) off the health poll, and the in-page console
+re-polls every 5 s so the number moves as pastes come in rather than freezing at boot.
+
+## 9. `escalation_rate` reads 0% while every paste is escalating — A's call
+
+**Severity: low on stage, confusing during bring-up.**
+
+`_tier_counts` is incremented in `_finish()`. The fail-closed path returns `_err(...)`
+directly and never reaches `_finish()`, so a paste that escalates to a T2 that is not up
+is not counted at all. Observed on the merged tree with the classifier down:
+
+```
+5 pastes: 2 resolved (T0, T1), 3 escalated and 503'd
+/healthz  ->  tiers {"T0":1,"T1":1}   escalation_rate 0.0
+```
+
+Defensible either way — a 503 is not a completed decision — but during bring-up the
+console will read **0% escalation while three of five pastes escalated**, which is the
+opposite of the signal you want when you are trying to work out whether the classifier is
+being reached. If A wants it counted, the increment belongs before the error return as
+well as in `_finish()`. **Flagged, not patched: `app.py` is A's file.**
+
+B's console renders whatever `/healthz` says and carries the tier breakdown in the
+tooltip, so the discrepancy is at least visible rather than silent.
+
+---
+
 ## Still open, owned elsewhere
 
-- `set_metric()` has no caller. B is scraping instead, so this is no longer blocking, but
-  the escalation-rate figure in the console still has no source and shows "—".
-- `results/scores_benign.json` needs one real harness run against a live classifier
-  before any FPR number is quoted anywhere. Both consoles will keep saying PLACEHOLDER
-  until then, deliberately.
+- `results/scores_benign.json` is the synthetic file from `bench/make_synthetic_scores.py`
+  and self-declares `corpus_is_real: false`. Both consoles will keep the PLACEHOLDER
+  label until a real harness run flips it — deliberately.
+- That synthetic set is **perfectly separated**: every benign row below 0.30, every
+  sensitive row above. The slider therefore reads 0.00% FPR and 100% recall at every τ
+  from 0.20 to 0.75, so it looks inert. Fine as a shape fixture; **not something to demo
+  with.** One real harness run against a live classifier fixes it.
