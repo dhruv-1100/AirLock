@@ -300,6 +300,30 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
         if verdict(r) == "BLOCK":
             d["tp"] += 1
 
+    # ---- per-language FP breakdown ----
+    # The corpus is genuinely multilingual (WildChat) while the T2 system prompt is
+    # English. Reporting FPR by language turns that from an asserted caveat into a
+    # measured result — and if the FP list does skew non-English, this is the table that
+    # says so honestly instead of leaving a judge to discover it.
+    lang_index: dict[str, str] = {}
+    try:
+        with open("data/benign_v1.jsonl", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    d = json.loads(line)
+                    lang_index[d["_id"]] = d.get("lang", "unknown")
+    except Exception:  # noqa: BLE001
+        pass
+
+    by_lang: dict[str, dict] = {}
+    if lang_index:
+        for r in bok:
+            lg = lang_index.get(r["_id"], "unknown")
+            d = by_lang.setdefault(lg, {"n": 0, "fp": 0})
+            d["n"] += 1
+            if verdict(r) == "BLOCK":
+                d["fp"] += 1
+
     lat = sorted(r["latency_ms"] for r in bok) or [0]
     p50 = lat[len(lat) // 2]
     p95 = lat[min(len(lat) - 1, int(len(lat) * 0.95))]
@@ -330,6 +354,11 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
             k: {**v, "fpr": v["fp"] / v["n"] if v["n"] else None,
                 "ci95": list(wilson(v["fp"], v["n"]))}
             for k, v in sorted(by_source.items())
+        },
+        "by_language": {
+            k: {**v, "fpr": v["fp"] / v["n"] if v["n"] else None,
+                "ci95": list(wilson(v["fp"], v["n"]))}
+            for k, v in sorted(by_lang.items(), key=lambda kv: -kv[1]["n"])
         },
         "by_class": {
             k: {**v, "recall": v["tp"] / v["n"] if v["n"] else None,
@@ -438,6 +467,15 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
                 f"{(v['recall'] or 0) * 100:.1f}% | "
                 f"[{v['ci95'][0] * 100:.1f}%, {v['ci95'][1] * 100:.1f}%] |"
             )
+    if report.get("by_language"):
+        md += ["", "## False positives by language", "",
+               "The corpus is multilingual; the classifier prompt is English. This table",
+               "reports that rather than asserting it.", "",
+               "| Language | n | FP | FPR | 95% CI |", "|---|---|---|---|---|"]
+        for k, v in report["by_language"].items():
+            md.append(
+                f"| {k} | {v['n']} | {v['fp']} | {(v['fpr'] or 0) * 100:.2f}% | "
+                f"[{v['ci95'][0] * 100:.2f}%, {v['ci95'][1] * 100:.2f}%] |")
     if report["precision_at_prevalence"]:
         md += ["", "## Precision at prevalence", "",
                "The argument for why FPR matters more than recall.", "",

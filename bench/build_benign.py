@@ -119,6 +119,57 @@ def _usable(t: str) -> bool:
     return MIN_CHARS <= len(t) <= MAX_CHARS
 
 
+# --------------------------------------------------------------------------- language
+# Per-item language tag, so the FPR can be broken down BY LANGUAGE rather than the
+# multilingual property being asserted as a caveat. WildChat is genuinely multilingual
+# and the T2 system prompt is English; a per-language FP table turns that from a
+# limitation into a finding.
+#
+# Two-stage and honest about its own resolution:
+#   · `langdetect` when installed — real language identification.
+#   · otherwise a Unicode-SCRIPT heuristic, which separates CJK / Cyrillic / Arabic /
+#     Devanagari / Hebrew / Greek / Thai from Latin reliably, but CANNOT tell English
+#     from Spanish or French. Reported as `latin` in that case, never as `en`, so the
+#     table never claims a precision it does not have.
+_SCRIPTS = [
+    ("cjk", ((0x3040, 0x30FF), (0x4E00, 0x9FFF), (0xAC00, 0xD7AF), (0x3400, 0x4DBF))),
+    ("cyrillic", ((0x0400, 0x04FF),)),
+    ("arabic", ((0x0600, 0x06FF), (0x0750, 0x077F))),
+    ("devanagari", ((0x0900, 0x097F),)),
+    ("hebrew", ((0x0590, 0x05FF),)),
+    ("greek", ((0x0370, 0x03FF),)),
+    ("thai", ((0x0E00, 0x0E7F),)),
+]
+
+
+def _detect_lang(text: str) -> tuple[str, str]:
+    """Returns (lang, method). method is 'langdetect' or 'script'."""
+    sample = text[:1500]
+    counts: dict[str, int] = {}
+    letters = 0
+    for ch in sample:
+        if not ch.isalpha():
+            continue
+        letters += 1
+        cp = ord(ch)
+        for name, ranges in _SCRIPTS:
+            if any(lo <= cp <= hi for lo, hi in ranges):
+                counts[name] = counts.get(name, 0) + 1
+                break
+    if letters:
+        for name, c in counts.items():
+            if c / letters >= 0.15:      # a meaningful share, not a stray character
+                return name, "script"
+
+    try:
+        from langdetect import detect, DetectorFactory  # type: ignore
+
+        DetectorFactory.seed = 0          # langdetect is nondeterministic without this
+        return detect(sample), "langdetect"
+    except Exception:  # noqa: BLE001
+        return "latin", "script"
+
+
 def _from_dump(src: Source, rng: random.Random) -> list[tuple[str, str]]:
     """Load from a pre-staged local dump. Returns [(record_id, text)].
 
@@ -129,8 +180,26 @@ def _from_dump(src: Source, rng: random.Random) -> list[tuple[str, str]]:
     """
     stem = src.name.lower().replace(" ", "_")
 
-    csv_path = DUMP_DIR / f"{stem}.csv"
-    if csv_path.exists():
+    # Search several locations. The pre-staged CFPB export lives under gb10/ on the box
+    # (gitignored), not in data/dumps/, so look there too rather than making someone
+    # move a file to satisfy a hardcoded path.
+    csv_candidates = [
+        DUMP_DIR / f"{stem}.csv",
+        Path("gb10/data") / f"{stem}_narratives.csv",
+        Path("gb10/data") / f"{stem}.csv",
+        Path("data") / f"{stem}_narratives.csv",
+    ]
+    if src.name == "CFPB":
+        csv_candidates.insert(0, Path("gb10/data/cfpb_narratives.csv"))
+    env_override = os.getenv(f"AIRLOCK_{src.name.upper().replace('-', '_')}_CSV")
+    if env_override:
+        csv_candidates.insert(0, Path(env_override))
+
+    tried: list[str] = []
+    for csv_path in csv_candidates:
+        if not csv_path.exists():
+            tried.append(str(csv_path))
+            continue
         try:
             import csv as _csv
 
@@ -138,17 +207,54 @@ def _from_dump(src: Source, rng: random.Random) -> list[tuple[str, str]]:
             with open(csv_path, newline="", encoding="utf-8", errors="replace") as f:
                 # CFPB narratives run long; the default field cap truncates them.
                 _csv.field_size_limit(10_000_000)
-                for r in _csv.DictReader(f):
+                reader = _csv.DictReader(f)
+                for r in reader:
                     rows.append(r)
                     if len(rows) >= src.n * 60:
                         break
             out = _extract(src, rows)
+            if not out and rows:
+                # The column name did not match any candidate in src.fields. Rather than
+                # reporting "no data" for a file that plainly has data, find the column
+                # with the longest average content and use that. CFPB's export column has
+                # been renamed more than once; guessing the schema is not worth an hour.
+                cols = list(rows[0].keys())
+                best, best_len = None, 0
+                for c in cols:
+                    vals = [str(r.get(c) or "") for r in rows[:200]]
+                    avg = sum(len(v) for v in vals) / max(1, len(vals))
+                    if avg > best_len:
+                        best, best_len = c, avg
+                if best and best_len >= MIN_CHARS * 0.5:
+                    print(f"  · {src.name}: no known column matched; "
+                          f"auto-selected {best!r} (avg {int(best_len)} chars)")
+                    out = [
+                        (f"{stem}:{r.get('Complaint ID', r.get('complaint_id', i))}",
+                         _clean(r.get(best, "")))
+                        for i, r in enumerate(rows)
+                    ]
+                    out = [(rid, t) for rid, t in out if _usable(t)]
             if out:
                 print(f"  · {src.name}: {len(out)} usable from dump {csv_path}")
                 src.method = "dump"
                 return out
+            print(f"  ! {src.name}: {csv_path} had no usable rows "
+                  f"(columns: {list(rows[0].keys())[:6] if rows else 'none'})",
+                  file=sys.stderr)
         except Exception as e:  # noqa: BLE001
             print(f"  ! {src.name}: CSV at {csv_path} unreadable ({e})", file=sys.stderr)
+
+    # A source that expects a CSV and found none must SAY SO. Failing silently here sent
+    # CFPB down the (retired) API path with no indication the file was simply not where
+    # we looked — which reads as "the API is broken" rather than "wrong path".
+    if tried and src.hf is None and not any(
+        (DUMP_DIR / f"{stem}.{e}").exists() for e in ("jsonl", "json")
+    ):
+        print(f"  · {src.name}: no CSV found. Looked in:", file=sys.stderr)
+        for t in tried:
+            print(f"      {Path(t).resolve()}", file=sys.stderr)
+        print(f"    Override with: AIRLOCK_{src.name.upper().replace('-', '_')}_CSV=/abs/path.csv",
+              file=sys.stderr)
 
     for ext in ("jsonl", "json"):
         p = DUMP_DIR / f"{stem}.{ext}"
@@ -460,6 +566,7 @@ def build(seed: int, out_path: Path, allow_synthetic: bool) -> int:
         src.got = len(picked)
 
         for rid, text, h in picked:
+            lang, lang_method = _detect_lang(text)
             records.append(
                 {
                     "_id": rid,
@@ -470,6 +577,8 @@ def build(seed: int, out_path: Path, allow_synthetic: bool) -> int:
                     "char_len": len(text),
                     "label": "BENIGN",
                     "text": text,
+                    "lang": lang,
+                    "lang_method": lang_method,
                     "synthetic": src.method == "synthetic",
                 }
             )
