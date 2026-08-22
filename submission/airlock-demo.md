@@ -1,24 +1,26 @@
-# submission/airlock-demo.mp4 — 62 s, 1600×980, no audio
+# submission/airlock-demo.mp4 — 64 s, 1600×934, no audio
 
-Screen recording of the real system on the box, not a mockup. §14 lists a short capture
-as optional insurance against a live-demo failure; this is it.
+Screen recording of the real system on the box. **The pastes are real** — driven through
+the loaded extension into the replica composer, and each one hit `/v1/inspect` on the
+live service (the request counter moved 1452 → 1454 during the take).
 
-| t | scene | what is real in it |
+| t | scene | what it shows |
 |---|---|---|
-| 0–14 s | **live console** at `localhost:5174` | decisions streaming from MongoDB over the change stream; `clf ✓ vlm ✓ mongo ✓`; **FPR 4.00%**, **recall 87.8%**, n **1000** from the measured run; KV-cache gauges scraped live from both vLLM `/metrics` |
-| 14–29 s | **block card** | evidence span underlined verbatim in the payload, the `<dl>` receipt, MongoDB `$rankFusion` scoreDetails expanded, and the `policy_denied` body the extension renders |
-| 29–38 s | **cascade strip** | the stage that did *not* run — "No model was called. Resolved deterministically at T1 on CPU" |
-| 38–48 s | **image path** | the FY26 chart with the vision model's own transcript, markers underlined in it |
-| 48–62 s | **policy evidence** | all four cloud LLM hosts returning `403 policy_denied` from inside the sandbox, and every inference request routing to one endpoint — the local 30B |
+| 0–22 s | **beat 1 — customer list blocked** | a real paste. "Blocked before it left this machine", HIGH · CUSTOMER_RECORD, POL-004 cited, the Ana Ruiz row **underlined verbatim in the payload**, receipt reading `bytes egressed 0`, and the cascade strip lighting CACHE with T0/T1/T2/T3 dark — *"No model was called."* The composer stays empty: the characters never reached the page. |
+| 22–34 s | **beat 2 — benign question** | a real paste of a Python question, allowed |
+| 34–48 s | **live console** | decisions off the change stream, FPR 4.00% / recall 87.8% / n 1000, KV gauges scraped from both vLLM `/metrics` |
+| 48–64 s | **policy evidence** | four cloud LLM hosts returning `403 policy_denied` from inside the sandbox; every inference request routed to one endpoint, the local 30B |
 
-## Honest notes, so nobody is caught out
+## Honest notes
 
-- The overlay scenes are driven from `tools/harness/` against `tools/fixtures/*.json`, not
-  from a live paste. The card, the evidence highlight, the scoreDetails tree and the
-  cascade are the real components rendering real verdict shapes; the paste that produced
-  them is a fixture. **Do not narrate this as a live paste.**
-- The console, the numbers, the KV gauges and the policy evidence are all live.
-- Beat 3 still does not block on the demo chart — the card shown is the transcript view.
-- Regenerate: `bash stack/run_inspect.sh`, `./web/console/serve.sh`,
-  `python3 -m http.server 5175`, then record `:1.0` with ffmpeg while walking the URLs
-  in the table above.
+- Beat 1 resolved from the **hash cache** (`tier: CACHE`, `<1 ms`) because the same
+  payload had been inspected during testing. That is a real Airlock behaviour — the
+  second identical paste blocks with no model call — but if you want the T2 path on
+  screen instead, clear the cache first:
+  `db.decisions.deleteMany({})`, then re-record.
+- The paste is dispatched as a synthetic `ClipboardEvent` carrying a real `DataTransfer`,
+  because the recording is driven over CDP. Our handler does not check `isTrusted`, so it
+  takes the same path a human ⌘V does — but a human ⌘V has still not been tested.
+- Beat 3 (image) is not in this cut: it does not block yet.
+- Regenerate: load the extension via CDP `Extensions.loadUnpacked` (Chrome 151 ignores
+  `--load-extension`), open the page **after** the extension is loaded, and record `:1.0`.
