@@ -2,6 +2,16 @@
 
 ## A → team
 
+- **Day-of bring-up is now scripted** (all A-owned, NFR-S1 — B/C never run these):
+  `stack/preflight.sh` (G0 driver gate + NFR-S2 ritual, blocks if mongo heap
+  unverified) → `stack/launch_text.sh` (0.40) → `stack/launch_vision.sh` (0.24)
+  → `stack/launch_clf.sh` (0.09) → `stack/warm.sh` (compile warm-up, re-run at
+  16:30) → `python stack/day_probes.py` (tokenizer distinctness + guided-JSON
+  spelling — record the winner below). `stack/memwatch.sh` runs in its own
+  terminal all day (NFR-S13 watchdog).
+- Set `AIRLOCK_TEXT_MODEL` to the pre-staged 35B NVFP4 weights path before
+  `launch_text.sh` — the script refuses to guess it.
+
 - `services/inspect` scaffold is up: `/healthz`, `OPTIONS`, `POST /v1/inspect`
   with the full CACHE → T0 → T1-HIGH → T2 router, span verification, and
   `p_block` from first-label-token logprobs (T=1.0 until Phase 3 calibration).
