@@ -4,13 +4,20 @@
 # and write the new whiteboard total BEFORE this command (NFR-S3).
 #
 # Flags are verbatim from SRS §10 Phase 0 item 4 / §7.5:
-#   0.40 util ≈ 51.6 GB of the shared 128 GB pool (w ~22 + FP8 KV ~26 + graphs ~3)
+#   0.40 util ≈ 51.6 GB of the shared pool — holds for the pre-staged
+#   Nemotron Lightning 30B NVFP4 too (w ~21 + FP8 KV ~26 + graphs ~3)
 #   --moe-backend marlin  MANDATORY on NVFP4 MoE — emits garbage on sm121 otherwise
 #   --max-num-seqs 8      NFR-S7: above ~4 decode streams TTFT spikes
 #   MTP spec-decode stays ON here and ONLY here (§7.1 — vision emits ≤8 tokens)
 set -euo pipefail
 
-MODEL="${AIRLOCK_TEXT_MODEL:?set AIRLOCK_TEXT_MODEL to the pre-staged weights path (VERIFY-ON-THE-DAY: exact snapshot dir on the box)}"
+# stack/models.env maps the pre-staged weights onto the model roles —
+# source it so the PATH (launch) / NAME (request) split cannot be mixed up.
+if [ -f "$(dirname "$0")/models.env" ]; then
+  set -a; . "$(dirname "$0")/models.env"; set +a
+fi
+
+MODEL="${AIRLOCK_TEXT_MODEL_PATH:?set AIRLOCK_TEXT_MODEL_PATH (weights path, e.g. /models/lightning) — NOT AIRLOCK_TEXT_MODEL, which is the request name}"
 IMAGE="${AIRLOCK_TEXT_IMAGE:-vllm/vllm-openai:latest}"
 
 bash "$(dirname "$0")/preflight.sh"

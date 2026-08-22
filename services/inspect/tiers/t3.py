@@ -17,7 +17,8 @@ from ..schemas import CLAUSE_IDS
 from . import t1
 
 VLM_BASE_URL = os.environ.get("AIRLOCK_VLM_URL", "http://127.0.0.1:8001/v1")
-VLM_MODEL = os.environ.get("AIRLOCK_VLM_MODEL", "Hcompany/Holo1.5-7B")
+# Request model NAME (--served-model-name), never a weights path.
+VLM_MODEL = os.environ.get("AIRLOCK_VLM_MODEL", "airlock-vision")
 T3_TIMEOUT_S = 2.0  # server internal budget for the T3 call (SRS §5.1)
 
 # Text schema minus GOV_ID / PAYMENT_CARD (SRS §5.4).

@@ -83,9 +83,11 @@ def test_full_row_unaffected(client, monkeypatch):
 
 # ------------------------------------------------------------ synthetic scores
 def test_synthetic_scores_shape(tmp_path):
+    out = tmp_path / "scores.json"   # never clobber the team's results file
     subprocess.run([sys.executable, "bench/make_synthetic_scores.py",
-                    "--n", "50", "--n-sensitive", "20"], cwd=ROOT, check=True)
-    s = json.loads((ROOT / "results" / "scores_benign.json").read_text())
+                    "--n", "50", "--n-sensitive", "20", "--out", str(out)],
+                   cwd=ROOT, check=True)
+    s = json.loads(out.read_text())
     assert s["corpus_is_real"] is False           # never reportable
     assert len(s["benign"]) == 50 and len(s["items"]) == 50
     assert len(s["sensitive"]) == 20

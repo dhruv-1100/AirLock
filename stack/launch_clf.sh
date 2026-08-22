@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
-# airlock-clf :8002 — Qwen3-4B-Instruct-2507 BF16 at --gpu-memory-utilization 0.09.
+# airlock-clf :8002 — NOT PART OF THE COMMITTED DEMO CONFIG.
 # Owner: A. ONLY A runs this (NFR-S1). Run stack/preflight.sh FIRST.
 #
-# Fallback (SRS §3): if this won't fit or boot, do NOT fight it — set
-# AIRLOCK_CLF_URL=http://127.0.0.1:8000/v1 on the inspect service and route T2
-# to the 35B. Costs latency, costs no memory.
+# Under the pre-staged weights (stack/models.env) T2 runs on :8000 — the only
+# classifier weights on disk are a second copy of Lightning (21 GB), which at
+# any honest utilisation pushes the sum past the 0.85 ceiling (NFR-S3).
+# Launch this ONLY if A's measurement shows the 30B missing NFR-L3
+# (p95 <= 600 ms) AND the budget has been re-cut on the whiteboard first.
 set -euo pipefail
 
-MODEL="${AIRLOCK_CLF_MODEL:-Qwen/Qwen3-4B-Instruct-2507}"
+# stack/models.env maps the pre-staged weights onto the model roles —
+# source it so the PATH (launch) / NAME (request) split cannot be mixed up.
+if [ -f "$(dirname "$0")/models.env" ]; then
+  set -a; . "$(dirname "$0")/models.env"; set +a
+fi
+
+MODEL="${AIRLOCK_CLF_MODEL_PATH:?set AIRLOCK_CLF_MODEL_PATH — but read the header first: under the pre-staged weights the demo config is TWO servers and T2 runs on :8000}"
 IMAGE="${AIRLOCK_CLF_IMAGE:-vllm/vllm-openai:latest}"
+UTIL="${AIRLOCK_CLF_UTIL:?REFUSING: two-server config is committed (T2 on :8000).
+Set AIRLOCK_CLF_UTIL explicitly (whiteboard re-cut first, sum <= 0.85) to override}"
 
 bash "$(dirname "$0")/preflight.sh"
 
@@ -22,10 +32,10 @@ docker run -d --name airlock-clf --gpus all \
   --model "$MODEL" \
   --served-model-name airlock-clf \
   --host 0.0.0.0 --port 8002 \
-  --gpu-memory-utilization 0.09 \
+  --gpu-memory-utilization "$UTIL" \
   --max-model-len 8192 \
   --max-num-seqs 8 \
   --limit-mm-per-prompt '{"image":0,"video":0}'
 
-echo "airlock-clf launching. Whiteboard: +0.09 (total 0.73 with text+vision — ceiling 0.85)."
+echo "airlock-clf launching at $UTIL. UPDATE THE WHITEBOARD — sum must stay <= 0.85."
 echo "Prefix caching serves the byte-identical T2 system prompt; keep it ON."

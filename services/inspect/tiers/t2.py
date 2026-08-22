@@ -14,7 +14,9 @@ import httpx
 from ..schemas import CLASSIFIER_SCHEMA
 
 CLF_BASE_URL = os.environ.get("AIRLOCK_CLF_URL", "http://127.0.0.1:8002/v1")
-CLF_MODEL = os.environ.get("AIRLOCK_CLF_MODEL", "Qwen/Qwen3-4B-Instruct-2507")
+# Request model NAME (--served-model-name), never a weights path. Two-server
+# demo config (stack/models.env): AIRLOCK_CLF_URL=:8000/v1 + CLF_MODEL=airlock-text.
+CLF_MODEL = os.environ.get("AIRLOCK_CLF_MODEL", "airlock-clf")
 T2_TIMEOUT_S = 1.2  # server internal budget for the T2 call (SRS §5.1)
 
 SYSTEM_PROMPT = """You are AIRLOCK, a local data-egress inspector. You classify a payload that an

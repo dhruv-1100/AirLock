@@ -368,7 +368,9 @@ async def _route(req, rid):
 
 
 TEXT_BASE_URL = os.environ.get("AIRLOCK_TEXT_URL", "http://127.0.0.1:8000/v1")
-TEXT_MODEL = os.environ.get("AIRLOCK_TEXT_MODEL", "Qwen/Qwen3.6-35B-A3B")
+# Request model NAME (--served-model-name), never a weights path — vLLM 404s
+# on the path and it reads exactly like the server being down (INTEGRATION-B).
+TEXT_MODEL = os.environ.get("AIRLOCK_TEXT_MODEL", "airlock-text")
 REPORT_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
                            "results", "report.json")
 
