@@ -371,6 +371,26 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
         "rule_of_three_upper": rule_of_three(n) if fp == 0 else None,
         "p50_ms": p50,
         "p95_ms": p95,
+        # TWO false-positive counts, because they disagree and the disagreement matters.
+        #   · verdict_fp  = what the ROUTER ACTUALLY DID (r["verdict"]). This is what a
+        #     user experiences and it is the honest headline.
+        #   · fp (above)  = re-thresholding p_block at tau, which is what the slider does.
+        # They differ whenever p_block contradicts the emitted label. Measured on the
+        # first real run: 53 vs 69. Reporting only one hides a real defect.
+        "verdict_fp": sum(1 for r in bok if r.get("verdict") == "BLOCK"),
+        "verdict_fpr": (sum(1 for r in bok if r.get("verdict") == "BLOCK") / n) if n else None,
+        "verdict_fpr_statement": fmt_rate(
+            sum(1 for r in bok if r.get("verdict") == "BLOCK"), n),
+        "p_block_disagrees_with_verdict": sum(
+            1 for r in bok
+            if (r.get("p_block") is not None)
+            and (((r["p_block"] >= thr) and r.get("verdict") != "BLOCK")
+                 or ((r["p_block"] < thr) and r.get("verdict") == "BLOCK"))
+        ),
+        "p_block_saturated_frac": (
+            sum(1 for r in bok if r.get("p_block") is not None
+                and (r["p_block"] < 0.05 or r["p_block"] > 0.95)) / n
+        ) if n else None,
         "escalation_rate": esc / n if n else None,
         "tier_mix": _tier_mix(bok),
         # Escalation rate is the seats-per-box multiplier (NFR-T7) and the input to the
@@ -543,7 +563,16 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
 
     # ---- console ----
     print("\n" + "=" * 64)
-    print(f"  FPR              {report['fpr_statement']}")
+    print(f"  FPR (verdict)    {report['verdict_fpr_statement']}   <- what the router did")
+    print(f"  FPR (p_block>=t) {report['fpr_statement']}   <- what the slider shows")
+    _dis = report.get("p_block_disagrees_with_verdict", 0)
+    _sat = report.get("p_block_saturated_frac") or 0
+    if _dis:
+        print(f"  ! p_block disagrees with the emitted verdict on {_dis} item(s).")
+    if _sat > 0.95:
+        print(f"  ! p_block is SATURATED: {_sat*100:.1f}% of items sit below 0.05 or above 0.95.")
+        print(f"    The threshold slider cannot move meaningfully and the three operating")
+        print(f"    points will read nearly identical. See INTEGRATION.md §11.")
     print(f"  p50 / p95        {p50} ms / {p95} ms")
     _mix = {k: f"{v['pct']}%" for k, v in report["tier_mix"].items()}
     print(f"  escalation       {(report['escalation_rate'] or 0) * 100:.1f}%")

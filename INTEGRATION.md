@@ -372,3 +372,106 @@ among others) — that is authentic real-world chat traffic, not a defect. But t
 system prompt is English, and no one has measured whether classification behaves the same
 on a Chinese paste. If the FP list comes back skewed toward non-English items, that is the
 explanation, and it is an honest limitation to state rather than a bug to hide.
+
+---
+
+# Round 5 — the first real run, and what it exposed
+
+B's n=1000 run against live models. Reproduced independently from `results/scores_benign.json`:
+FPR 6.90% [5.49%, 8.64%], escalation 99.8%, ECE 0.0695, 0 errors, 787 s. Good run,
+well executed. Three findings came out of reading it.
+
+## 11. `p_block` is saturated and contradicts the emitted verdict — A
+
+**Severity: high. It invalidates the threshold slider, the three operating points, and
+the calibration story, and it makes the headline FPR ambiguous.**
+
+Two different false-positive counts fall out of the same run:
+
+```
+verdict == "BLOCK"     (what the router actually did)  →  53 / 1000 = 5.30%
+p_block >= 0.55        (what the slider re-thresholds) →  69 / 1000 = 6.90%
+```
+
+The 16-item gap is items with `predicted_label: "BENIGN"`, `verdict: "ALLOW"`,
+`override: null` — and `p_block` between 0.73 and **1.0**. Per SRS §6.5,
+`p_block = 1 − p("BENIGN")`, so a BENIGN label with p_block 1.0 is self-contradictory.
+
+Worse, the distribution is **saturated**, not calibrated:
+
+| p_block range | items |
+|---|---|
+| 0.00 – 0.05 | 924 |
+| 0.05 – 0.55 | 7 |
+| 0.55 – 0.95 | 8 |
+| 0.95 – 1.00 | 61 |
+
+**985 of 1000 items sit at the extremes. Only 15 lie anywhere in between.**
+
+Consequences, all of which land in the demo or the writeup:
+
+- **The threshold slider is inert.** Sweeping τ across the whole operating range moves
+  FPR by four tenths of a percentage point:
+  ```
+  τ=0.20 → 7.10%    τ=0.30 → 7.00%    τ=0.55 → 6.90%    τ=0.75 → 6.70%
+  ```
+  The demo beat "drag the slider, watch FPR and recall move live" will visibly do
+  nothing. B saw this with the synthetic fixture and it is now true of real data too.
+- **Audit / Balanced / Strict are indistinguishable** — three rows reading 7.10 / 7.00 /
+  6.90. Publishing them as three operating points invites "why have a dial at all?"
+- **ECE and the reliability diagram are computed on a two-spike distribution.**
+  Temperature scaling cannot produce a meaningful curve from it; the fitted `T` will be
+  fitting noise between two masses.
+
+**A — this is §6.5, the logprob path.** The spec is `p_block = 1 − p("BENIGN")` taken from
+`top_logprobs` over the **first token of the `label` value**, renormalised across the nine
+labels. A saturated 0/1 output is what you get from reading the sampled token's own
+probability rather than renormalising across the label set, or from a fallback that sets
+1.0 when the expected token is not in `top_logprobs`. The 16 BENIGN-with-p_block-1.0 cases
+point at the latter. Worth 20 minutes — it is the difference between having an operating-
+point story and not.
+
+**Until it is fixed, `verdict_fpr` (5.30%) is the honest headline**, because it is what the
+product actually did. `report.py` now emits both, plus
+`p_block_disagrees_with_verdict` and `p_block_saturated_frac`, and prints a warning —
+so whichever way this goes, the discrepancy cannot be quoted away silently.
+
+## 12. My multilingual hypothesis was wrong — reporting it as a negative result
+
+I predicted the FP list would skew non-English. It does not:
+
+| language | n | FP | rate | 95% CI |
+|---|---|---|---|---|
+| latin | 944 | 66 | 7.0% | [5.5%, 8.8%] |
+| cjk | 35 | 3 | 8.6% | [3.0%, 22.4%] |
+| cyrillic | 20 | 0 | 0.0% | [0.0%, 16.1%] |
+| arabic | 1 | 0 | 0.0% | — |
+
+Overlapping intervals, no signal. **Language is not the driver.** The per-language table
+still belongs in the submission — a pre-registered hypothesis that failed is worth more
+than one that was never tested — but the caveat should now read "we checked, and found no
+effect", not "this may explain it".
+
+## 13. What the false positives actually are
+
+53 recorded blocks, by the label we wrongly assigned:
+
+| label | n | mostly from |
+|---|---|---|
+| LEGAL_HR | 18 | CFPB (17) |
+| GOV_ID | 10 | CFPB |
+| PAYMENT_CARD | 7 | CFPB |
+| HEALTH_RECORD | 5 | WildChat |
+| FINANCIAL_NONPUBLIC | 5 | CFPB |
+| PROPRIETARY_CODE | 4 | WildChat |
+| CREDENTIAL | 2 | WildChat |
+| airlock_unavailable | 2 | WildChat (fail-closed, not a classifier decision) |
+
+CFPB contributes 41 of 69 while being 12% of the corpus. B's adjudication — that these are
+consumers' personal financial grievances and blocking them is arguably the product
+working — is sound reasoning. **But the conclusion is that CFPB was a poor choice of
+*benign* source, not that our FPR is really 3.2%.** Dropping the source that produced the
+bad number, after seeing the number, is results-driven selection and a judge will say so.
+
+Report 5.30% measured, publish the per-source table, state the CFPB finding plainly, and
+give the ex-CFPB rate as a clearly-labelled sensitivity analysis — never as the headline.
