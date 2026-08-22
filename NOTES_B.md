@@ -85,7 +85,7 @@ orphaned content scripts.
 | `extension/console.js` | The in-page live console panel, bottom-left, collapsible. Threshold slider, mode dropdown, KV gauges, lockdown toggle. |
 | `extension/sw.js` | The only thing that touches the network. `/v1/inspect`, the WebSocket, the SSE relay, the `declarativeNetRequest` lockdown rule. |
 | `extension/mainworld.js` | MAIN-world `fetch` patch. **Stretch — cut at 16:00 without hesitation if anything else is amber.** |
-| `extension/scores_benign.json` | **PLACEHOLDER.** Shape only. Overwrite with `results/scores_benign.json` the moment A produces it. The console labels it as a placeholder until you do. |
+| `extension/scores_benign.json` | Copy of `results/scores_benign.json`. Currently the synthetic file from `bench/make_synthetic_scores.py`, which self-declares `corpus_is_real: false` — both consoles keep the PLACEHOLDER label until a real harness run flips that flag. Re-copy after every real run. |
 | `web/replica/` | `localhost:5173`. Beat 4's stage. |
 | `web/console/` | `localhost:5174`. Standalone projector console — works with no extension at all. |
 | `tools/stub_inspect.py` | B's inspector. Full contract: inspect, healthz, policy, decisions, feedback, report, SSE answer, WebSocket stream, CORS with `Access-Control-Allow-Private-Network`. |
@@ -114,6 +114,26 @@ orphaned content scripts.
    with `setNativeValue()` (prototype setter + `input` event) as the fallback.
 5. **Bind to `document`, never to a selector.** ProseMirror and Lexical rebuild their
    nodes constantly; a selector-bound listener ends up on a node that no longer exists.
+
+## When the console feed is dead, check this first
+
+The console renders, backfills 50 rows over HTTP, and then never updates again. The
+instinct is to go debug the change stream, the resume token or Mongo. Check uvicorn's
+WebSocket support before any of that (INTEGRATION.md §7): if `websockets` was not
+installed **at the moment uvicorn started**, uvicorn picks its no-op WebSocket
+implementation and every upgrade request 404s while every HTTP route keeps working.
+
+```bash
+python -c "import websockets; print(websockets.__version__)"
+```
+
+Installing it under a running server changes nothing — **restart uvicorn**. A healthy
+connect sends `{"type":"hello","policy_version":"policy_v1","resume":null}` as the first
+frame; you can see it in the service-worker DevTools window.
+
+Second thing to check, and it is a B-side thing: both consoles scrape `:8000`/`:8001`
+`/metrics` themselves for the KV gauges, because nothing calls `ConsoleHub.set_metric()`.
+A gauge reading "—" means that vLLM server is not up, not that the console is broken.
 
 ## Fail-closed, everywhere
 
