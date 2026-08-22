@@ -111,6 +111,17 @@ def precision_at_prevalence(tpr: float, fpr: float, prevalence: float) -> float:
     return num / den if den else 0.0
 
 
+def _tier_mix(rows: list[dict]) -> dict:
+    """Which tier actually resolved each item. The single most diagnostic number in the
+    run: it says whether the cascade behaved as designed or collapsed to one tier."""
+    mix: dict[str, int] = {}
+    for r in rows:
+        mix[r.get("tier", "?")] = mix.get(r.get("tier", "?"), 0) + 1
+    total = len(rows) or 1
+    return {k: {"n": v, "pct": round(v / total * 100, 1)}
+            for k, v in sorted(mix.items(), key=lambda kv: -kv[1])}
+
+
 # --------------------------------------------------------------------------- loading
 def load(path: Path) -> list[dict]:
     """Read a scores file, tolerating every shape that has existed in this repo.
@@ -361,6 +372,24 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
         "p50_ms": p50,
         "p95_ms": p95,
         "escalation_rate": esc / n if n else None,
+        "tier_mix": _tier_mix(bok),
+        # Escalation rate is the seats-per-box multiplier (NFR-T7) and the input to the
+        # blended-latency target (NFR-L8, p50 <= 60 ms). Both assume ~14% of pastes reach
+        # a model. This corpus has a 200-char floor, so it contains NONE of the short
+        # pastes the T0 fast path exists to resolve — T0 cannot fire on it by
+        # construction. When escalation is near-total, the FPR is still valid (measured
+        # entirely on the hard subset, which is conservative) but throughput, blended
+        # latency and seats/box measured here are NOT representative of a real paste
+        # distribution. Flag it in the artifact so nobody has to remember.
+        "throughput_representative": (esc / n if n else 0) < 0.5,
+        "throughput_caveat": (
+            None if (esc / n if n else 0) < 0.5 else
+            "Escalation is near-total because the benign corpus has a 200-character "
+            "floor and the T0 fast path only fires below 40 characters. FPR is measured "
+            "on the hard subset and is therefore conservative; escalation rate, blended "
+            "latency and seats-per-box from this run are NOT representative of a real "
+            "paste distribution and must be reported with this caveat."
+        ),
         "recall": recall,
         "recall_statement": (
             fmt_rate(sum(1 for r in sok if verdict(r) == "BLOCK"), len(sok)) if sok else None
@@ -465,6 +494,12 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
     if report["recall_statement"]:
         md.append(f"- Recall on the sensitive split: **{report['recall_statement']}**")
     md.append(f"- ECE: **{report['ece']:.4f}**")
+    md += ["", "## Which tier resolved each paste", "",
+           "| Tier | n | % |", "|---|---|---|"]
+    for k, v in report["tier_mix"].items():
+        md.append(f"| {k} | {v['n']} | {v['pct']}% |")
+    if report.get("throughput_caveat"):
+        md += ["", f"> **{report['throughput_caveat']}**"]
     md += ["", "## False positives by source", "",
            "| Source | n | FP | FPR | 95% CI |", "|---|---|---|---|---|"]
     for k, v in report["by_source"].items():
@@ -510,7 +545,19 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
     print("\n" + "=" * 64)
     print(f"  FPR              {report['fpr_statement']}")
     print(f"  p50 / p95        {p50} ms / {p95} ms")
+    _mix = {k: f"{v['pct']}%" for k, v in report["tier_mix"].items()}
     print(f"  escalation       {(report['escalation_rate'] or 0) * 100:.1f}%")
+    print(f"  tier mix         {_mix}")
+    if not report["throughput_representative"]:
+        print()
+        print("  " + "!" * 62)
+        print("  ! Escalation is near-total. FPR is VALID and conservative — every item")
+        print("  ! reached the model, so nothing was resolved by a fast path.")
+        print("  ! But escalation rate, blended latency and seats/box from this run are")
+        print("  ! NOT representative: the corpus has a 200-char floor and T0 only fires")
+        print("  ! below 40 chars, so T0 cannot fire on it by construction.")
+        print("  ! Report those three WITH the caveat. Do not quote a ~14% escalation.")
+        print("  " + "!" * 62)
     if report["recall_statement"]:
         print(f"  recall           {report['recall_statement']}")
     print(f"  ECE              {report['ece']:.4f}")

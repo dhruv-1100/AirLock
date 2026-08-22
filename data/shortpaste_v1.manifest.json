@@ -1,0 +1,13 @@
+{
+  "corpus": "shortpaste_v1.jsonl",
+  "version": "shortpaste_v1",
+  "n": 40,
+  "purpose": "functional probe of the T0 fast path \u2014 NOT a second FPR denominator",
+  "all_authored": true,
+  "source": "hand-authored",
+  "license": "n/a \u2014 written by us",
+  "max_chars": 39,
+  "t0_gate": "len < 40 and no digit and none of {@ : / =}",
+  "reproduce": "python bench/build_shortpaste.py --seed 1337",
+  "why": "benign_v1 has a 200-char floor, so T0 cannot fire on it: measured 0/1000 resolved at T0 and 100% escalated to T2. This set demonstrates the fast path works rather than reporting one we never exercised. Report it as its own line; never merge it into the n=1000 denominator."
+}

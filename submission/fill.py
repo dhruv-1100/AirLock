@@ -44,6 +44,7 @@ MANUAL = {
     "HARD_NEGATIVE_RESULT": "C — hard-negative bucket as its own line",
     "OVERRIDE_RATE": "A — span-verification override rate",
     "INTERRUPTIONS": "C — 200,000 × measured FPR",
+    "T0_PROBE_RESULT": "C — run bench/build_shortpaste.py then run_fpr.py against it",
 }
 
 
@@ -146,6 +147,12 @@ def build_map(r: dict) -> dict[str, str]:
             m[f"FPR_{name}"] = pct(op.get("fpr"))
             m[f"RECALL_{name}"] = pct(op.get("recall"), 1)
     m.setdefault("FPR_BALANCED", m["FPR_STATEMENT"])
+    # tier mix + the throughput caveat, straight from the run
+    if r.get("tier_mix"):
+        rows = ["| Tier | n | % of corpus |", "|---|---|---|"]
+        for k, v in r["tier_mix"].items():
+            rows.append(f"| {k} | {v['n']} | {v['pct']}% |")
+        m["TIER_MIX_TABLE"] = "\n".join(rows)
     m.update(corpus_facts())
     return m
 
