@@ -182,8 +182,36 @@
   let n = 0;
   const hhmmss = (ts) => new Date(ts || Date.now()).toTimeString().slice(0, 8);
 
-  function addRow(d) {
-    if (!d || d.type !== 'decision') return;
+  // Two sources, two shapes. The WebSocket sends ConsoleHub frames, already normalised
+  // ({type:'decision', host, action:'block'}). GET /v1/decisions backfills raw
+  // `decisions` documents straight out of Mongo ({verdict:'BLOCK', origin:'https://…'},
+  // no `type` at all). Rejecting anything without type:'decision' would drop the entire
+  // backfill silently — an empty console that looks like a dead feed rather than a
+  // shape mismatch. Normalise here instead; it is the consumer's job.
+  function normalise(d) {
+    if (!d || typeof d !== 'object') return null;
+    if (d.type && d.type !== 'decision') return null;
+    const origin = d.origin || '';
+    const host = d.host || (origin ? origin.split('//').pop().split('/')[0] : 'local');
+    let ts = d.ts;
+    if (typeof ts === 'string') ts = Date.parse(ts) || Date.now();
+    return {
+      ts: ts || Date.now(),
+      decision_id: d.decision_id || d._id || null,
+      host,
+      modality: d.modality || 'text',
+      chars: d.chars != null ? d.chars : 0,
+      action: String(d.action || d.verdict || 'allow').toLowerCase(),
+      label: d.label || 'BENIGN',
+      p_block: Number(d.p_block) || 0,
+      tier: d.tier || 'T1',
+      latency_ms: d.latency_ms != null ? d.latency_ms : null,
+    };
+  }
+
+  function addRow(raw) {
+    const d = normalise(raw);
+    if (!d) return;
     if ($feed.querySelector('.empty')) $feed.innerHTML = '';
     const blocked = d.action === 'block';
     const el = document.createElement('div');
@@ -206,13 +234,53 @@
   // scores_benign.json is A's per-item p_block dump from bench/run_fpr.py. A drops a
   // synthetic 1000-row file with the right shape at 14:35 so this is finished before
   // the real scores exist; copy the real one over the bundled fixture when it lands.
-  let SCORES = null;   // { benign: [p…], sensitive: [p…] }
+  let SCORES = null;   // { benign: [p…], sensitive: [p…], errors, placeholder }
+
+  // results/scores_benign.json has had three shapes today and will probably have a
+  // fourth. Accept all of them here rather than making whoever copies the file learn
+  // which one the slider wants:
+  //   {benign:[floats], sensitive:[floats]}   ← the agreed shape (INTEGRATION.md §3)
+  //   {items:[{p_block, label|verdict, tier}]} ← report.py's rich per-item shape
+  //   [ {p_block, ...}, ... ]                  ← bare list, what run_fpr.py wrote first
+  // Rows whose tier is "ERR" are harness failures, not classifier scores. Counting a
+  // fail-closed BLOCK as a false positive would be a lie in our own favour's opposite
+  // direction, and either way it is not a measurement — so they are excluded and
+  // reported separately.
+  function normaliseScores(raw) {
+    if (!raw) return null;
+    if (Array.isArray(raw)) raw = { items: raw };
+    let benign = raw.benign, sensitive = raw.sensitive, errors = 0;
+    if (!Array.isArray(benign) && Array.isArray(raw.items)) {
+      benign = []; sensitive = [];
+      for (const it of raw.items) {
+        if (!it || typeof it.p_block !== 'number') continue;
+        if (it.tier === 'ERR' || it.verdict_label === 'airlock_unavailable') { errors += 1; continue; }
+        (String(it.label).toUpperCase() === 'BENIGN' ? benign : sensitive).push(it.p_block);
+      }
+    }
+    if (!Array.isArray(benign)) return null;
+    return {
+      benign,
+      sensitive: Array.isArray(sensitive) ? sensitive : [],
+      errors,
+      placeholder: !!raw._placeholder,
+      corpusIsReal: raw.corpus_is_real !== false && !raw._placeholder,
+    };
+  }
 
   async function loadScores() {
     try {
       const url = chrome.runtime.getURL('scores_benign.json');
       const res = await fetch(url);
-      SCORES = await res.json();
+      SCORES = normaliseScores(await res.json());
+      if (SCORES && !SCORES.corpusIsReal) {
+        $('.cached').textContent =
+          'PLACEHOLDER SCORES — shape only. Replace with results/scores_benign.json before quoting a number.';
+        $('.cached').style.color = '#fcd34d';
+      } else if (SCORES && SCORES.errors) {
+        $('.cached').textContent =
+          `scores cached; threshold sweep is exact — ${SCORES.errors} harness errors excluded from the denominator`;
+      }
       sweep(Number($('.tau-range').value));
     } catch (e) {
       console.debug('[airlock] no cached scores bundled', e);
@@ -279,13 +347,37 @@
       if (!h) return void $health.classList.add('down');
       const allUp = h.ok && h.clf && h.vlm && h.mongo;
       $health.classList.add(h.ok ? (allUp ? 'up' : 'amber') : 'down');
-      $health.title = JSON.stringify(h);
+      const bits = [`clf ${h.clf ? '✓' : '✗'}`, `vlm ${h.vlm ? '✓' : '✗'}`,
+                    `mongo ${h.mongo ? '✓' : '✗'}`, `up ${h.uptime_s || 0}s`];
+      // The span-verification override count is the one deliberate fail-open in the
+      // system. Showing it costs a tooltip and buys the right to call it a mechanism.
+      // NFR-T6 escalation rate lives on /healthz, not in a metric frame — nothing
+      // broadcasts one. Without this the console's escalation figure stays "—".
+      if (typeof h.escalation_rate === 'number') {
+        $('.esc').textContent = (h.escalation_rate * 100).toFixed(0) + '%';
+        if (h.tiers) $('.shared').title = Object.entries(h.tiers).map(([k, v]) => `${k}:${v}`).join('  ');
+      }
+      if (h.overrides != null) bits.push(`span overrides ${h.overrides}`);
+      if (h.img_gate && h.img_gate.seen) {
+        bits.push(`img fast-pass ${Math.round(h.img_gate.fast_passed / h.img_gate.seen * 100)}%`);
+      }
+      if (h.stub) bits.push('STUB INSPECTOR');
+      $health.title = bits.join(' · ');
     });
 
     net.decisions(50).then((res) => {
       const rows = (res && res.decisions) || [];
       // backfill oldest-first so prepend() leaves newest on top
       rows.slice().reverse().forEach(addRow);
+      // /v1/decisions reports whether Mongo is actually CONNECTED. /healthz reports
+      // whether the module IMPORTED. They disagree when the container is down, and the
+      // connected one is the truth worth showing.
+      if (res && res.mongo === false) {
+        $health.classList.remove('up');
+        $health.classList.add('amber');
+        $health.title = ($health.title ? $health.title + ' · ' : '') +
+          'MongoDB NOT connected — no history, no instant-block cache';
+      }
     });
 
     net.onFrame((frame) => {
@@ -301,6 +393,14 @@
     });
 
     loadScores();
+    // Re-poll every 5 s: escalation rate, override count and the image fast-pass rate
+    // all move as pastes come in, and a figure frozen at boot is worse than none.
+    setInterval(() => net.health().then((h) => {
+      if (!h) return;
+      if (typeof h.escalation_rate === 'number') {
+        $('.esc').textContent = (h.escalation_rate * 100).toFixed(0) + '%';
+      }
+    }), 5000);
   }
   boot();
 })();

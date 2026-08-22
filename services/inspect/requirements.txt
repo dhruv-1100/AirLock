@@ -21,3 +21,8 @@ pyyaml>=6                 # policy.yaml -> /v1/policy and the clause enum
 # policy_corpus for real.
 # sentence-transformers>=3     # bge-small-en-v1.5, 384-d
 # matplotlib>=3.8              # bench/report.py figures, bench/make_images.py charts
+
+# --- A's bench tooling (Phase 3, runs on the box, CPU only) --------------------
+aiohttp>=3.10             # bench/run_fpr.py HTTP client
+scipy>=1.13               # bench/fit_calibration.py minimize_scalar T fit
+# matplotlib (optional, above) also draws bench/fit_calibration.py reliability.png
