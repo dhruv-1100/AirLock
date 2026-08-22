@@ -1,0 +1,224 @@
+"""airlock inspect-svc — FastAPI on 127.0.0.1:8787 (SRS §5, §6.4).
+
+Router, not an AND-cascade:  CACHE → T0 → T1-HIGH → T2  (T3 for images).
+Fail closed everywhere: any internal failure returns the policy_denied shape,
+never an allow. CPU-only process — never imports torch, never touches a GPU
+(NFR-S1).
+
+Run:  uvicorn services.inspect.app:app --host 127.0.0.1 --port 8787
+"""
+
+import asyncio
+import base64
+import binascii
+import hashlib
+import json
+import os
+import time
+import uuid
+
+import httpx
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+
+from . import verify as verify_mod
+from .calib import p_block_from_logprobs
+from .schemas import (DEFAULT_MODE, LABEL_TO_CLAUSE, MODES, error_body,
+                      verdict_body)
+from .tiers import t0, t1, t2, t3
+from .verify import verify
+
+MAX_BODY = 8 * 1024 * 1024
+MAX_INFLIGHT = 32
+TOTAL_BUDGET_S = 2.3
+
+# C owns mongo.py; the cache degrades to in-process when it is absent so A is
+# never blocked on C (Phase-0 parallelism rule).
+try:
+    from . import mongo  # noqa: F401
+    _HAVE_MONGO = True
+except ImportError:
+    _HAVE_MONGO = False
+
+app = FastAPI(title="airlock inspect-svc")
+_started = time.monotonic()
+_inflight = asyncio.Semaphore(MAX_INFLIGHT)
+_cache: dict[str, dict] = {}  # payload_sha256 → verdict body (instant re-block)
+
+CLAUSES = {
+    "POL-001": "Live credentials and secrets must never leave managed endpoints.",
+    "POL-002": "Real payment card data must not be sent to external services.",
+    "POL-003": "Government identifiers must not leave managed endpoints.",
+    "POL-004": "Customer-identifying records must not leave managed endpoints.",
+    "POL-005": "Patient-identifiable health information must never be shared externally.",
+    "POL-006": "Unreleased financial information must not be disclosed before announcement.",
+    "POL-007": "Internal source code and infrastructure configuration stay internal.",
+    "POL-008": "NDA'd, litigation, and HR matters must not be shared externally.",
+    "NONE": "",
+}
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Private-Network": "true",
+    "Access-Control-Max-Age": "600",
+}
+
+
+@app.middleware("http")
+async def cors(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=CORS_HEADERS)
+    resp = await call_next(request)
+    resp.headers.update(CORS_HEADERS)
+    return resp
+
+
+async def _probe(url):
+    try:
+        async with httpx.AsyncClient(timeout=0.3) as c:
+            r = await c.get(url)
+            return r.status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+@app.get("/healthz")
+async def healthz():
+    clf, vlm = await asyncio.gather(
+        _probe(t2.CLF_BASE_URL.rsplit("/v1", 1)[0] + "/health"),
+        _probe(t3.VLM_BASE_URL.rsplit("/v1", 1)[0] + "/health"))
+    return {"ok": True, "clf": clf, "vlm": vlm, "mongo": _HAVE_MONGO,
+            "uptime_s": int(time.monotonic() - _started),
+            "overrides": verify_mod.override_count}
+
+
+def _err(code, label, reason, request_id):
+    return JSONResponse(status_code=code,
+                        content=error_body(code, label, reason, request_id))
+
+
+@app.post("/v1/inspect")
+async def inspect(request: Request):
+    raw = await request.body()
+    rid = "r_" + uuid.uuid4().hex[:6]
+    if len(raw) > MAX_BODY:
+        return _err(413, "body_too_large", "Body exceeds 8 MiB", rid)
+    try:
+        req = json.loads(raw)
+    except json.JSONDecodeError:
+        return _err(400, "malformed_json", "Body is not valid JSON", rid)
+    if req.get("schema") != "airlock.inspect.v1":
+        return _err(400, "bad_schema", "Missing or unknown schema", rid)
+    rid = req.get("request_id", rid)
+    images = req.get("images") or []
+    if len(images) > 4:
+        return _err(413, "too_many_images", "More than 4 images", rid)
+    for im in images:
+        try:
+            base64.b64decode(im.get("b64", ""), validate=True)
+        except (binascii.Error, ValueError):
+            return _err(422, "image_decode_failure", "Invalid base64 image", rid)
+
+    if _inflight.locked():
+        return _err(429, "overloaded", "More than 32 requests in flight", rid)
+    async with _inflight:
+        try:
+            return await asyncio.wait_for(_route(req, rid), TOTAL_BUDGET_S)
+        except (asyncio.TimeoutError, httpx.TimeoutException):
+            return _err(504, "airlock_timeout",
+                        "Upstream classifier exceeded budget — deny by default", rid)
+        except Exception:
+            return _err(503, "airlock_unavailable",
+                        "Inspector unreachable — deny by default", rid)
+
+
+def _respond(rid, *, action, label, severity, reason, spans, verified, p_block,
+             threshold, tier, model, modality, t_start, score_details=None,
+             clause_id=None):
+    clause_id = clause_id or LABEL_TO_CLAUSE.get(label, "NONE")
+    body = verdict_body(
+        request_id=rid, action=action, label=label, severity=severity,
+        clause_id=clause_id, clause_text=CLAUSES.get(clause_id, ""),
+        reason=reason, evidence_spans=spans, evidence_verified=verified,
+        p_block=round(p_block, 4), threshold=threshold, tier=tier, model=model,
+        modality=modality, latency_ms=int((time.monotonic() - t_start) * 1000),
+        decision_id=uuid.uuid4().hex[:24], score_details=score_details)
+    return body
+
+
+async def _route(req, rid):
+    t_start = time.monotonic()
+    text = req.get("text") or ""
+    images = req.get("images") or []
+    modality = "image" if images else "text"
+    mode = req.get("mode") or DEFAULT_MODE
+    threshold = req.get("threshold") or MODES.get(mode, MODES[DEFAULT_MODE])
+    audit_only = mode == "audit"  # audit logs, never blocks (SRS §6.5)
+
+    def block_action():
+        return "warn" if audit_only else "block"
+
+    # ---- CACHE — sha256 replay, ~1 ms -------------------------------------
+    key = hashlib.sha256(
+        (text + "".join(im.get("b64", "") for im in images)).encode()).hexdigest()
+    if key in _cache:
+        hit = dict(_cache[key])
+        hit.update(request_id=rid, tier="CACHE",
+                   latency_ms=int((time.monotonic() - t_start) * 1000))
+        return JSONResponse(hit)
+
+    # ---- T3 — images: transcribe, then re-run T1+T2 on the OCR text -------
+    if images:
+        im = images[0]
+        ocr = await t3.transcribe(im["b64"], im.get("mime", "image/jpeg"))
+        text = (text + "\n" + ocr).strip()
+
+    # ---- T0 — trivial gate ------------------------------------------------
+    if modality == "text" and t0.is_trivial(text):
+        return JSONResponse(_respond(
+            rid, action="allow", label="BENIGN", severity="NONE",
+            reason="Trivial payload", spans=[], verified=True, p_block=0.0,
+            threshold=threshold, tier="T0", model="none", modality=modality,
+            t_start=t_start))
+
+    # ---- T1 — deterministic scan ------------------------------------------
+    scan = t1.scan(text)
+    if scan.confidence == "HIGH":
+        body = _respond(
+            rid, action=block_action(), label=scan.label, severity="HIGH",
+            reason=f"Deterministic detector: {scan.detector}",
+            spans=scan.evidence_spans, verified=True, p_block=1.0,
+            threshold=threshold, tier="T1" if modality == "text" else "T3",
+            model="none", modality=modality, t_start=t_start)
+        _cache[key] = body
+        return JSONResponse(body)
+
+    # ---- T2 — LLM classifier, guided JSON, span-verified ------------------
+    verdict, logprobs, model = await t2.classify(text, hints=scan.hints or None)
+    verdict = verify(verdict, text)
+    p_block = p_block_from_logprobs(logprobs, verdict)
+    label = verdict["label"]
+    blocked = label != "BENIGN" and p_block >= threshold
+
+    body = _respond(
+        rid,
+        action=(block_action() if blocked else "allow"),
+        label=label if blocked else "BENIGN",
+        severity=verdict.get("severity", "NONE") if blocked else "NONE",
+        reason=verdict.get("rationale", ""),
+        spans=verdict.get("evidence_spans", []) if blocked else [],
+        verified="override" not in verdict,
+        p_block=p_block, threshold=threshold,
+        tier="T2" if modality == "text" else "T3",
+        model=f"airlock-clf/{model}", modality=modality, t_start=t_start,
+        clause_id=verdict.get("policy_clause_id") if blocked else "NONE")
+    if blocked:
+        _cache[key] = body
+    return JSONResponse(body)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", 8787)))
