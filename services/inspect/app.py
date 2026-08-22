@@ -119,7 +119,11 @@ async def healthz():
             "uptime_s": int(time.monotonic() - _started),
             "overrides": verify_mod.override_count,
             "img_gate": {"seen": gate_img.seen_count,
-                         "fast_passed": gate_img.fast_pass_count}}
+                         "fast_passed": gate_img.fast_pass_count},
+            "tiers": dict(_tier_counts),
+            "escalation_rate": round(
+                (_tier_counts.get("T2", 0) + _tier_counts.get("T3", 0))
+                / max(1, sum(_tier_counts.values())), 4)}
 
 
 def _err(code, label, reason, request_id):
@@ -176,14 +180,25 @@ def _respond(rid, *, action, label, severity, reason, spans, verified, p_block,
     return body
 
 
+# Escalation rate (NFR-T6) — the seats-per-box multiplier. Counted in-process
+# and exposed on /healthz so the console figure has a source even without Mongo
+# (INTEGRATION-B.md "still open": write_metric had no caller).
+_tier_counts: dict[str, int] = {}
+
+
 async def _finish(body, key, *, origin="", text="", n_images=0, cache=False):
     """Persist the decision (INTEGRATION.md §2: payload_text on blocks so
     write_back_corpus can embed the real paste on beat 4), then respond.
     write_decision never raises and returns a fake id in no-op mode."""
+    _tier_counts[body["tier"]] = _tier_counts.get(body["tier"], 0) + 1
     if _HAVE_MONGO:
         body["decision_id"] = await mongo.write_decision(
             body, key, origin=origin, chars=len(text), images=n_images,
             payload_text=text if body["action"] in ("block", "warn") else None)
+        await mongo.write_metric(
+            model=body["model"], modality=body["modality"],
+            verdict=str(body["action"]).upper(), tier=body["tier"],
+            latency_ms=body["latency_ms"])
     if cache and body["action"] == "block" and ABLATION == "full":
         _cache[key] = body
     return JSONResponse(body)
