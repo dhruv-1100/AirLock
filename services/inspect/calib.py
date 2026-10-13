@@ -85,7 +85,15 @@ def label_logits_from_logprobs(choice_logprobs):
                 mass[lb] += p
     if sum(mass.values()) <= 0:
         raise ValueError("no label mass in top_logprobs")
-    return {lb: math.log(m) for lb, m in mass.items() if m > 0}
+    # A label absent from the top-k is NOT probability zero — its mass is bounded above
+    # by the smallest probability that did make the list. Dropping absent labels (as this
+    # used to) made a confident model's posterior renormalise over BENIGN alone, so
+    # p_block came out exactly 0.0 at every temperature: 812 of 1000 benign scores, an
+    # inert threshold slider, and temperature scaling that could not move anything.
+    # PLAN.md B3. The floor is an upper bound, so this errs toward p_block > 0 — the
+    # direction that keeps a fail-closed product honest.
+    floor = min(c["logprob"] for c in entry["top_logprobs"])
+    return {lb: (math.log(m) if m > 0 else floor) for lb, m in mass.items()}
 
 
 def p_block_from_logits(logits, T=None):

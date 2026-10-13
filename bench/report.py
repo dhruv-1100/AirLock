@@ -401,6 +401,10 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
         ) if n else None,
         "escalation_rate": esc / n if n else None,
         "tier_mix": _tier_mix(bok),
+        "p_block_source": {
+            src: sum(1 for r in bok if (r.get("p_block_source") or "unrecorded") == src)
+            for src in sorted({r.get("p_block_source") or "unrecorded" for r in bok})
+        },
         # Escalation rate is the seats-per-box multiplier (NFR-T7) and the input to the
         # blended-latency target (NFR-L8, p50 <= 60 ms). Both assume ~14% of pastes reach
         # a model. This corpus has a 200-char floor, so it contains NONE of the short

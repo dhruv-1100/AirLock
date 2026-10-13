@@ -11,6 +11,7 @@ Run:  uvicorn services.inspect.app:app --host 127.0.0.1 --port 8787
 import asyncio
 import base64
 import binascii
+import contextlib
 import hashlib
 import json
 import logging
@@ -24,6 +25,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import verify as verify_mod
 from . import calib as calib_mod
+from . import origins
 from .calib import (label_logits_from_logprobs,
                     p_block_from_logprobs)
 from .schemas import (DEFAULT_MODE, LABEL_TO_CLAUSE, MODES, error_body,
@@ -60,7 +62,16 @@ except ImportError:
 
 log = logging.getLogger("airlock")
 
-app = FastAPI(title="airlock inspect-svc")
+@contextlib.asynccontextmanager
+async def _lifespan(_app):
+    """Replaces two @app.on_event("startup") handlers, which FastAPI deprecated
+    (PLAN.md B7). Order is unchanged: Mongo first, then the upstream probe."""
+    await _connect_mongo()
+    await _announce_endpoints()
+    yield
+
+
+app = FastAPI(title="airlock inspect-svc", lifespan=_lifespan)
 
 # C's console surface: GET /v1/decisions, GET /v1/policy, ws /v1/stream
 # (INTEGRATION.md §1 — B's console is dead without this).
@@ -71,13 +82,11 @@ except ImportError:
     pass
 
 
-@app.on_event("startup")
 async def _connect_mongo():
     if _HAVE_MONGO:
         await mongo.connect()
 
 
-@app.on_event("startup")
 async def _announce_endpoints():
     """Print the resolved upstreams and probe them at boot.
 
@@ -114,21 +123,25 @@ CLAUSES = {
     "NONE": "",
 }
 
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Private-Network": "true",
-    "Access-Control-Max-Age": "600",
-}
-
-
 @app.middleware("http")
 async def cors(request: Request, call_next):
+    """Origin policy lives in origins.py (PLAN.md B1). Refusals are enforced on the
+    request itself, not only on the preflight: a simple GET is never preflighted, and a
+    browser only hides a disallowed response from page JS — it still sends the request,
+    so a POST to /v1/feedback would have been executed regardless."""
+    origin = request.headers.get("origin")
+    headers = origins.cors_headers(origin, request.url.path)
+    if headers is None:
+        return JSONResponse(
+            status_code=403,
+            content=error_body(403, "origin_not_allowed",
+                               f"Origin {origin} may not call {request.url.path}",
+                               "r_" + uuid.uuid4().hex[:6]),
+        )
     if request.method == "OPTIONS":
-        return Response(status_code=204, headers=CORS_HEADERS)
+        return Response(status_code=204, headers=headers)
     resp = await call_next(request)
-    resp.headers.update(CORS_HEADERS)
+    resp.headers.update(headers)
     return resp
 
 
@@ -538,6 +551,14 @@ async def feedback(request: Request):
         return _err(400, "bad_request", "Missing decision_id", rid)
     if _HAVE_MONGO and hasattr(mongo, "write_back_corpus"):
         corpus_id = await mongo.write_back_corpus(decision_id)
+        # write_back_corpus returns None when Mongo is down, the decision does not exist,
+        # or there is nothing to embed. This used to answer {"embedded": true,
+        # "corpus_id": "None"} regardless — the analyst saw success and the detector
+        # learned nothing, which is demo beat 4 failing silently (PLAN.md B4).
+        if corpus_id is None:
+            return _err(503, "feedback_not_recorded",
+                        "Correction was not written to the corpus — the detector has not learned it",
+                        rid)
         return {"ok": True, "corpus_id": str(corpus_id), "embedded": True}
     return {"ok": True, "corpus_id": f"stub_{decision_id[:8]}", "embedded": False}
 

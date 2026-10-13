@@ -54,11 +54,25 @@ Unused imports and placeholder-less f-strings. Cosmetic; no behaviour change.
 
 ---
 
-## Bugs — open, with owner and fix
+## Bugs — fixed in the follow-up (applied to A's and B's files at the team's request)
 
-Ordered by what they cost.
+All verified live and pinned by `tests/test_audit_fixes.py` — 15 of its 19 tests fail on
+the pre-fix code; the other 4 are preservation tests that must pass on both.
 
-### B1. Any website can read blocked secrets and poison the detector — **HIGH** (A)
+| | Fix | Verified |
+|---|---|---|
+| **B1** | `services/inspect/origins.py`: public tier (`/healthz`, `/v1/inspect`, `/v1/policy`) stays open — the content-script fallback needs it; everything else allowlisted. Refused on the request itself, not only the preflight. WebSocket checks `Origin` too (browsers apply no CORS to WS). `/v1/decisions` no longer ships `evidence_spans`, `payload_sha256` or ciphertext. | `evil.example`: OPTIONS 204→**403**, GET 200→**403**, POST feedback 200→**403**. Extension, localhost pages and curl unchanged. |
+| **B2** | `mode: 'closed'`; card renders only evidence-bearing lines ±1 of context. `ctxPayload` untouched so the local-answer button still gets the full text. | From page JS: `shadowRoot === null`, 0 chars readable. Card and console still render. |
+| **B3** | Absent labels floored at the smallest top-k logprob instead of dropped. | Confident-model fixture: was `0.0` at T=1/3/8, now `p1 < p3 < p8`. |
+| **B4** | `/v1/feedback` returns 503 when nothing was written. B's overlay already handled a non-ok body correctly — the server was lying to it. | Mongo-down feedback no longer answers `embedded:true`. |
+| **B7** | Two `@app.on_event` handlers → one `lifespan`, same order. | Deprecation warnings 5 → 1 (the remaining one is Starlette's own `httpx` notice). |
+| plan #3 | `run_fpr.py` records `p_block_source`; `report.py` counts it. | Fallback rate becomes a number on the next run. |
+
+## Bug detail
+
+Struck through = fixed above. **Still open: B5, B6, B8.**
+
+### ~~B1~~ FIXED — Any website can read blocked secrets and poison the detector — **HIGH** (A)
 
 The gateway sends `Access-Control-Allow-Origin: *` with
 `Access-Control-Allow-Private-Network: true` and checks no origin anywhere. Proven against
@@ -89,7 +103,7 @@ label, tier and latency, and never needs the span text.
 
 **Verify:** the three curls above with `Origin: https://evil.example` must all return 403.
 
-### B2. The block card renders the blocked payload into the destination site's DOM — **HIGH** (B)
+### ~~B2~~ FIXED — The block card renders the blocked payload into the destination site's DOM — **HIGH** (B)
 
 `extension/overlay.js:251` — `host.attachShadow({ mode: 'open' })`. The card shows the
 payload with the offending row underlined, inside an *open* shadow root in the page we are
@@ -103,7 +117,7 @@ The robust version is the extension side panel rather than in-page DOM.
 `label`, clause text, the payload itself — goes through `esc()` before `innerHTML`. No XSS
 via a crafted paste.
 
-### B3. `p_block` cannot be calibrated as written — **HIGH** (A)
+### ~~B3~~ FIXED — `p_block` cannot be calibrated as written — **HIGH** (A)
 
 98.1% of scores sit at the extremes, and **812 of 1000 are exactly 0.0**. A softmax over
 nine labels cannot produce an exact zero, so for those 812 pastes BENIGN was the only label
@@ -138,7 +152,7 @@ output: right now the fallback rate is unauditable.
 **What it unblocks:** the threshold slider, three distinct operating points, a real
 reliability diagram, a meaningful ECE. Today all four are cosmetic.
 
-### B4. `/v1/feedback` reports success when nothing was written — **MEDIUM** (A)
+### ~~B4~~ FIXED — `/v1/feedback` reports success when nothing was written — **MEDIUM** (A)
 
 `app.py:540-541`:
 
@@ -169,7 +183,7 @@ Makes the FPR conservative and the throughput numbers unrepresentative. Stated i
 README and SUBMISSION.md. `data/shortpaste_v1.jsonl` exists to show T0 works —
 **it has never been run against the service.**
 
-### B7. `@app.on_event` is deprecated — **LOW** (A)
+### ~~B7~~ FIXED — `@app.on_event` is deprecated — **LOW** (A)
 
 `app.py:74` and `:80`. Works today; removed in a future FastAPI. Move to a `lifespan`
 handler. Also `starlette.testclient` warns about `httpx` — pin or move to `httpx2`.
@@ -189,9 +203,9 @@ max share 40% < 55%), but the attestation is not in the artifact. Re-run
 
 | # | Task | Owner | Done when |
 |---|---|---|---|
-| 1 | **B3** floor absent labels in `calib.py` | A | `p_block==0.0` count drops from 812 to ~0 |
+| 1 | ~~B3 floor absent labels~~ **done** | — | re-run confirms the 0.0 count drops |
 | 2 | Run `bench/fit_calibration.py` on the dev split | A | `results/calibration.json` exists, T ≠ 1.0 |
-| 3 | Record `p_source` per item in the run | A | fallback rate is a number in the report |
+| 3 | ~~Record `p_block_source`~~ **done** | — | |
 | 4 | Re-run `run_fpr.py` with the sensitive split | box | `scores_sensitive.json` on disk, recall 394/400 reproduced |
 | 5 | `report.py` | C | recall 98.5%, hard-negative line present, slider spread visible |
 
@@ -199,9 +213,9 @@ max share 40% < 55%), but the attestation is not in the artifact. Re-run
 
 | # | Task | Owner | Done when |
 |---|---|---|---|
-| 6 | **B1** origin allowlist + drop `evidence_spans` from `/v1/decisions` | A | evil-origin curls all 403 |
-| 7 | **B2** closed shadow root, masked payload | B | `host.shadowRoot === null` from page context |
-| 8 | **B4** feedback returns 503 on `None` | A | Mongo-down feedback ≠ `embedded:true` |
+| 6 | ~~B1~~ **done** | — | |
+| 7 | ~~B2~~ **done** | — | |
+| 8 | ~~B4~~ **done** | — | |
 
 ### Phase 3 — finish the evidence (≈2 h)
 
@@ -218,7 +232,7 @@ max share 40% < 55%), but the attestation is not in the artifact. Re-run
 |---|---|---|---|
 | 13 | `python submission/fill.py` | C | `grep -c '{{' SUBMISSION.final.md` → 0 |
 | 14 | Re-check every number in README / PITCH against `fpr_report.json` | C | no drift |
-| 15 | **B5, B7** | A | optional — honest reporting is acceptable for B5 |
+| 15 | **B5** (B7 done) | A | optional — honest reporting is acceptable |
 
 **Critical path:** 1 → 2 → 4 → 5 → 9 → 13. Everything in Phase 2 can run in parallel with
 it, and should — B1 and B2 are the two findings a security-minded judge would raise first.

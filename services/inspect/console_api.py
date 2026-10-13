@@ -32,6 +32,7 @@ from typing import Any
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from . import mongo as M
+from . import origins
 from .stream import ConsoleHub
 
 log = logging.getLogger("airlock.console_api")
@@ -136,6 +137,12 @@ async def stream(ws: WebSocket) -> None:
     Backed by a MongoDB change stream on `decisions` with the invalidate → startAfter
     transition, so it survives the several re-seeds that happen during the build day.
     """
+    # The HTTP CORS middleware never sees WebSocket upgrades, and browsers do NOT apply
+    # CORS to WebSockets at all — any page can open ws://127.0.0.1:8787 and receive every
+    # frame. The Origin header is the only signal there is, so check it here (PLAN.md B1).
+    if not origins.origin_allowed(ws.headers.get("origin")):
+        await ws.close(code=1008)            # policy violation
+        return
     await ws.accept()
     await _ensure_started()
     await hub.register(ws)

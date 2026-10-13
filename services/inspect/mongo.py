@@ -236,12 +236,25 @@ async def get_by_hash(payload_sha256: str) -> dict | None:
 
 
 async def recent_decisions(limit: int = 50) -> list[dict]:
-    """Console backfill. Never point the console at benign_eval."""
+    """Console backfill. Never point the console at benign_eval.
+
+    Projects out everything that is, or derives from, the blocked content. The console
+    renders host, label, tier, latency and score — nothing else — and this endpoint is
+    the one a hostile page would aim at (PLAN.md B1):
+      evidence_spans      the literal blocked substrings
+      payload_sha256      brute-forceable for short secrets: an SSN has ~10^9 values
+      payload_enc/nonce   ciphertext; no reason to ship it to a browser
+      evidence_png/nonce  same
+    """
     if not MONGO_ENABLED or _db is None:
         return []
     try:
         cur = _coll("decisions").aggregate(
-            [{"$sort": {"ts": -1}}, {"$limit": limit}, {"$project": {"evidence_png": 0}}]
+            [{"$sort": {"ts": -1}}, {"$limit": limit}, {"$project": {
+                "evidence_png": 0, "evidence_nonce": 0,
+                "payload_enc": 0, "payload_enc_nonce": 0,
+                "evidence_spans": 0, "payload_sha256": 0,
+            }}]
         )
         return [_jsonable(d) async for d in cur]
     except Exception as e:  # noqa: BLE001

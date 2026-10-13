@@ -124,6 +124,9 @@ async def inspect_one(session, url: str, item: dict, threshold: float, mode: str
                 "evidence_spans": v.get("evidence_spans", []),
                 "evidence_verified": v.get("evidence_verified", False),
                 "override": v.get("override"),
+                # logprobs vs verbalized-confidence fallback. Not recording this is why
+                # a fully saturated score distribution once passed for a calibrated one.
+                "p_block_source": v.get("p_block_source"),
                 "http_status": 200,
             }
     except Exception as e:  # noqa: BLE001

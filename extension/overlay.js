@@ -248,7 +248,13 @@
   host.id = 'airlock-root';
   host.setAttribute('data-airlock', '1');
   host.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:' + Z + ';';
-  const root = host.attachShadow({ mode: 'open' });
+  // CLOSED, not open (PLAN.md B2). This card renders the blocked payload inside the DOM
+  // of the very site we are blocking it from. With mode:'open', any script on that page
+  // — and any DOM-capturing session-replay tool it runs — could read
+  // host.shadowRoot.textContent and recover the secret. A closed root returns null to the
+  // page; the only reference lives in this ISOLATED-world closure and in
+  // window.__AIRLOCK_UI__, which is the isolated world's global and invisible to page JS.
+  const root = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
   style.textContent = CSS;
   root.appendChild(style);
@@ -313,6 +319,41 @@
   // substrings of the payload. We locate them and underline exactly those characters.
   // If a span is not found, we say so rather than quietly rendering a plain payload —
   // the whole point of span verification is that it is checkable.
+  // Only the lines that carry evidence, plus one line of context either side. A 12-row
+  // customer list used to be rendered in full; now the card shows the offending row and
+  // says how much it left out. Defence in depth behind the closed root: if a regression
+  // ever reopens it, the minimum is exposed. Spans are verified substrings, so they are
+  // located against the full text first and the window is cut afterwards.
+  function excerpt(payload, spans, ctxLines = 1) {
+    const text = String(payload || '');
+    const lines = text.split('\n');
+    if (lines.length <= 3) return text;
+    const hit = new Set();
+    let off = 0;
+    const starts = lines.map((l) => { const s0 = off; off += l.length + 1; return s0; });
+    (spans || []).forEach((sp) => {
+      if (!sp) return;
+      const i = text.indexOf(sp);
+      if (i === -1) return;
+      const j = i + sp.length;
+      lines.forEach((l, k) => {
+        const a = starts[k], b = a + l.length;
+        if (a < j && i <= b) for (let d = -ctxLines; d <= ctxLines; d++) hit.add(k + d);
+      });
+    });
+    if (!hit.size) return lines.slice(0, 2).join('\n') + '\n… ' + (lines.length - 2) + ' more lines not shown';
+    const keep = [...hit].filter((k) => k >= 0 && k < lines.length).sort((a, b) => a - b);
+    const out = [];
+    let prev = -1;
+    for (const k of keep) {
+      if (k > prev + 1) out.push('… ' + (k - prev - 1) + ' line' + (k - prev - 1 === 1 ? '' : 's') + ' not shown');
+      out.push(lines[k]);
+      prev = k;
+    }
+    if (prev < lines.length - 1) out.push('… ' + (lines.length - 1 - prev) + ' more line' + (lines.length - 1 - prev === 1 ? '' : 's') + ' not shown');
+    return out.join('\n');
+  }
+
   function highlight(payload, spans) {
     const text = String(payload || '');
     const found = [];
@@ -499,7 +540,7 @@
     ctxPayload = (ctx && ctx.payloadText) || '';
 
     const unavailable = v.label === 'airlock_unavailable';
-    const hl = highlight(ctxPayload, v.evidence_spans);
+    const hl = highlight(excerpt(ctxPayload, v.evidence_spans), v.evidence_spans);
     const sev = v.severity || 'HIGH';
     const p = typeof v.p_block === 'number' ? v.p_block : null;
     const denied = {
