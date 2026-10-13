@@ -20,7 +20,8 @@ none is typed in by hand.
 |---|---|
 | **False-positive rate** | **4.00%  [2.95%, 5.40%]  (40/1000)** |
 | Denominator | 1000 benign pastes we did not write, six independently-licensed sources |
-| Recall | 87.78%  [84.43%, 90.49%]  (395/450) — synthetic set, so an **upper bound** |
+| Recall | **98.50%  [96.77%, 99.31%]  (394/400)** — synthetic set, so an **upper bound** |
+| Hard negatives wrongly blocked | 1/50 = 2.0%  [0.4%, 10.5%] — reported as its own line |
 | Threshold | 0.55 (Balanced), selected on dev, reported on test |
 | Published industry average | 51% → **12.8× better** |
 | Interruption tax | 8,000/week at 5,000 employees × 40 pastes, vs 102,000 at the industry average |
@@ -154,8 +155,8 @@ recorded demo.
 **Known limitations — stated here rather than discovered:**
 
 - **`p_block` is saturated.** 98.1% of items sit below 0.05 or above 0.95. The threshold
-  slider therefore barely moves (FPR 4.70% → 4.00% across τ 0.20 → 0.55) and **recall is
-  identical at all three operating points**. The verdict-based and score-based FPRs now
+  slider therefore barely moves (FPR 4.70% → 4.00% across τ 0.20 → 0.55) and recall is
+  identical at all three operating points. The verdict-based and score-based FPRs now
   agree, so the headline is sound, but the operating-point story is weak and the
   calibration curve is fitted to two spikes.
 - **Escalation is 99.8%, not the ~14% the design assumed.** The benign corpus has a
@@ -178,8 +179,13 @@ recorded demo.
   path and is Enterprise/Atlas only, so evidence is AES-GCM encrypted with a key in a 0600
   file that never leaves the box.
 
-**Outstanding:** the four-row ablation table, and generating `SUBMISSION.final.md` from
-the current numbers.
+**Correction (Oct 2026):** recall was first published here as 87.78% (395/450). That
+counted the 50 hard negatives — which are labelled BENIGN — as recall targets, so 49
+correct allows were scored as misses. The true figure is 394/400 = 98.50%. Fixed in
+`bench/run_fpr.py` and `bench/report.py`, with a regression test that fails on the old
+code (`tests/test_report_recall.py`).
+
+**Outstanding:** see `PLAN.md`.
 
 ---
 

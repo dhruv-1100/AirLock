@@ -40,7 +40,7 @@ import os
 import random
 import re
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
 MIN_CHARS, MAX_CHARS = 200, 4000
@@ -715,7 +715,7 @@ def _build(seed: int, out_path: Path, allow_synthetic: bool, force: bool = False
 
     print(f"\nwrote {len(records)} records → {out_path}")
     print(f"wrote manifest        → {mpath}")
-    print(f"wrote attribution     → data/ATTRIBUTION.md")
+    print("wrote attribution     → data/ATTRIBUTION.md")
     if any_synthetic:
         print("\n*** CORPUS IS NOT REAL — corpus_is_real=false. Do not report an FPR. ***")
         return 1

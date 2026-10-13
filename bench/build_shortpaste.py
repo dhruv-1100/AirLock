@@ -197,7 +197,7 @@ def build(seed: int, out_path: Path, n: int) -> int:
     )
 
     print(f"\nwrote {len(records)} records → {out_path}")
-    print(f"  all satisfy the T0 gate  ✓")
+    print("  all satisfy the T0 gate  ✓")
     print(f"  authored: {manifest['all_authored']}")
     print("\nRun against the service, then report SEPARATELY:")
     print(f"  python bench/run_fpr.py --benign {out_path} --n {len(records)} --no-mongo")

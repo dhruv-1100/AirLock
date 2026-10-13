@@ -106,7 +106,7 @@ async def inspect_one(session, url: str, item: dict, threshold: float, mode: str
                 return {
                     "_id": item["_id"], "source": item.get("source", ""),
                     "sha256": item.get("sha256", ""), "char_len": item.get("char_len", 0),
-                    "label": item.get("label", "BENIGN"), "verdict": "BLOCK",
+                    "label": item.get("label", "BENIGN"), "bucket": item.get("bucket", ""), "verdict": "BLOCK",
                     "p_block": 1.0, "latency_ms": elapsed, "tier": v.get("tier", "ERR"),
                     "predicted_label": v.get("label", "airlock_unavailable"),
                     "http_status": r.status, "error": v.get("reason", f"HTTP {r.status}"),
@@ -114,7 +114,7 @@ async def inspect_one(session, url: str, item: dict, threshold: float, mode: str
             return {
                 "_id": item["_id"], "source": item.get("source", ""),
                 "sha256": item.get("sha256", ""), "char_len": item.get("char_len", 0),
-                "label": item.get("label", "BENIGN"),
+                "label": item.get("label", "BENIGN"), "bucket": item.get("bucket", ""),
                 "verdict": str(v.get("action", "allow")).upper().replace("WARN", "ALLOW"),
                 "p_block": float(v.get("p_block", 0.0)),
                 "latency_ms": int(v.get("latency_ms", elapsed)),
@@ -130,7 +130,7 @@ async def inspect_one(session, url: str, item: dict, threshold: float, mode: str
         return {
             "_id": item["_id"], "source": item.get("source", ""),
             "sha256": item.get("sha256", ""), "char_len": item.get("char_len", 0),
-            "label": item.get("label", "BENIGN"), "verdict": "ERROR",
+            "label": item.get("label", "BENIGN"), "bucket": item.get("bucket", ""), "verdict": "ERROR",
             "p_block": None, "latency_ms": int((time.perf_counter() - t0) * 1000),
             "tier": "ERR", "predicted_label": None, "http_status": None, "error": str(e),
         }
@@ -262,7 +262,7 @@ async def main_async(a) -> int:
 
     srows = []
     if sensitive:
-        print(f"\nrunning sensitive split")
+        print("\nrunning sensitive split")
         srows = await run_split(sensitive, a.url, a.threshold, a.mode, a.concurrency, "sensitive")
 
     wall = time.perf_counter() - t0
@@ -273,6 +273,14 @@ async def main_async(a) -> int:
     #   · bench/report.py wants the rich per-item dicts               -> reads .items
     #   · A's earlier harness wrote a bare list of dicts              -> would show "—" in B's slider
     # Emitting one object that satisfies all three means neither A nor B changes anything.
+    def _is_sensitive(r):
+        # Hard negatives live in the sensitive corpus but are labelled BENIGN. They must
+        # never enter a recall denominator: an ALLOW on one is a correct decision, and a
+        # BLOCK is a false positive. Counting them as recall targets turned 394/400
+        # (98.5%) into a published 395/450 (87.8%) — and B's slider, which computes
+        # recall from this list, inherited the same error.
+        return r.get("label", "BENIGN") != "BENIGN" and r.get("bucket") != "HARD_NEGATIVE"
+
     def _plist(rows):
         return [r["p_block"] for r in rows if r.get("p_block") is not None]
 
@@ -280,7 +288,7 @@ async def main_async(a) -> int:
         json.dumps(
             {
                 "benign": _plist(brows),
-                "sensitive": _plist(srows),
+                "sensitive": _plist([r for r in srows if _is_sensitive(r)]),
                 "threshold_default": a.threshold,
                 "n": len(brows),
                 "corpus_is_real": corpus_real,
@@ -295,11 +303,20 @@ async def main_async(a) -> int:
     )
     if srows:
         (results_dir / "scores_sensitive.json").write_text(
-            json.dumps({"sensitive": _plist(srows), "items": srows}, indent=1)
+            json.dumps({"sensitive": _plist([r for r in srows if _is_sensitive(r)]), "items": srows}, indent=1)
         )
 
     bsum = summarise(brows, a.threshold, is_benign=True)
-    ssum = summarise(srows, a.threshold, is_benign=False) if srows else None
+    hn_rows = [r for r in srows if not _is_sensitive(r)]
+    ssum = summarise([r for r in srows if _is_sensitive(r)], a.threshold, is_benign=False) if srows else None
+    if ssum is not None:
+        hn_ok = [r for r in hn_rows if r["verdict"] != "ERROR"]
+        hn_fp = sum(1 for r in hn_ok if r["verdict"] == "BLOCK")
+        ssum["hard_negative"] = {
+            "n": len(hn_ok), "false_pos": hn_fp,
+            "fpr": hn_fp / len(hn_ok) if hn_ok else None,
+            "blocked_ids": [r["_id"] for r in hn_ok if r["verdict"] == "BLOCK"],
+        }
 
     report = {
         "reproduce": f"python bench/run_fpr.py --seed {a.seed} --n {a.n} --threshold {a.threshold}",

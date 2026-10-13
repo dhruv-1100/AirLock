@@ -302,7 +302,15 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
         return r.get("verdict", "ERROR") if p is None else ("BLOCK" if p >= thr else "ALLOW")
 
     bok = [r for r in benign if r.get("p_block") is not None]
-    sok = [r for r in sensitive if r.get("p_block") is not None]
+    _scored = [r for r in sensitive if r.get("p_block") is not None]
+    # Hard negatives are in the sensitive corpus but labelled BENIGN. They are NOT recall
+    # targets: an ALLOW is correct, a BLOCK is a false positive. Mixing them into the
+    # recall denominator published 395/450 = 87.8% when the true figure was 394/400 =
+    # 98.5%, and hid the hard-negative FP line SRS §14 asks for by name.
+    def _hard_neg(r):
+        return r.get("bucket") == "HARD_NEGATIVE" or r.get("label", "BENIGN") == "BENIGN"
+    sok = [r for r in _scored if not _hard_neg(r)]
+    hn = [r for r in _scored if _hard_neg(r)]
 
     n = len(bok)
     fps = [r for r in bok if verdict(r) == "BLOCK"]
@@ -411,6 +419,12 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
             "paste distribution and must be reported with this caveat."
         ),
         "recall": recall,
+        "hard_negative": {
+            "n": len(hn),
+            "false_pos": sum(1 for r in hn if verdict(r) == "BLOCK"),
+            "statement": fmt_rate(sum(1 for r in hn if verdict(r) == "BLOCK"), len(hn)) if hn else None,
+            "blocked_ids": [r.get("_id") for r in hn if verdict(r) == "BLOCK"],
+        },
         "recall_statement": (
             fmt_rate(sum(1 for r in sok if verdict(r) == "BLOCK"), len(sok)) if sok else None
         ),
@@ -571,8 +585,8 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
         print(f"  ! p_block disagrees with the emitted verdict on {_dis} item(s).")
     if _sat > 0.95:
         print(f"  ! p_block is SATURATED: {_sat*100:.1f}% of items sit below 0.05 or above 0.95.")
-        print(f"    The threshold slider cannot move meaningfully and the three operating")
-        print(f"    points will read nearly identical. See INTEGRATION.md §11.")
+        print("    The threshold slider cannot move meaningfully and the three operating")
+        print("    points will read nearly identical. See INTEGRATION.md §11.")
     print(f"  p50 / p95        {p50} ms / {p95} ms")
     _mix = {k: f"{v['pct']}%" for k, v in report["tier_mix"].items()}
     print(f"  escalation       {(report['escalation_rate'] or 0) * 100:.1f}%")
@@ -589,9 +603,11 @@ def build_report(thr: float, prevalence: float, selftest: bool) -> int:
         print("  " + "!" * 62)
     if report["recall_statement"]:
         print(f"  recall           {report['recall_statement']}")
+    if report["hard_negative"]["n"]:
+        print(f"  hard negatives   {report['hard_negative']['statement']}   <- FPs on traps, own line")
     print(f"  ECE              {report['ece']:.4f}")
     print("=" * 64)
-    print(f"  wrote fpr_report.json, REPORT.md, false_positives.md")
+    print("  wrote fpr_report.json, REPORT.md, false_positives.md")
     if made:
         print(f"  wrote figures: {', '.join(made)}")
     if not report["reportable"]:

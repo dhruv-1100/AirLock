@@ -41,7 +41,6 @@ MANUAL = {
     "ABLATION_TABLE": "A — the four-row ablation",
     "INTER_RATER": "C — n reviewed, disagreements, Cohen's κ",
     "ADJUDICATION": "C — from results/false_positives.md, after hand review",
-    "HARD_NEGATIVE_RESULT": "C — hard-negative bucket as its own line",
     "OVERRIDE_RATE": "A — span-verification override rate",
     "INTERRUPTIONS": "C — 200,000 × measured FPR",
     "T0_PROBE_RESULT": "C — run bench/build_shortpaste.py then run_fpr.py against it",
@@ -153,6 +152,12 @@ def build_map(r: dict) -> dict[str, str]:
         for k, v in r["tier_mix"].items():
             rows.append(f"| {k} | {v['n']} | {v['pct']}% |")
         m["TIER_MIX_TABLE"] = "\n".join(rows)
+    hn = r.get("hard_negative") or {}
+    if hn.get("n"):
+        m["HARD_NEGATIVE_RESULT"] = (
+            f"**{hn['statement']}** of the hard negatives were wrongly blocked"
+            + (f" (`{'`, `'.join(hn['blocked_ids'])}`)." if hn.get("blocked_ids") else ".")
+        )
     m.update(corpus_facts())
     return m
 

@@ -25,7 +25,6 @@ may not edit it.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import Any

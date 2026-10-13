@@ -24,7 +24,6 @@ import json
 import logging
 import os
 import re
-import time
 from typing import Any, Awaitable, Callable
 
 log = logging.getLogger("airlock.stream")
