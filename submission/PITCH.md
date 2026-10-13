@@ -1,254 +1,115 @@
-# PITCH.md — C narrates. 5:00 total.
+# PITCH.md — narration for the recorded demo
 
-**B drives the browser. C narrates. A drives the terminal and says nothing unless asked a
-direct technical question.** Every payload is pre-staged in a scratch file on screen 2.
-**Nobody types on stage.**
+**The GB10 is no longer available, so there is no live demo.** This is narration for
+B's 121-second screen recording of the real system (`submission/airlock-demo.md` lists
+what is in each second). If only the earlier 62-second cut can be found, the same lines
+apply in a different order — it is recoverable with
+`git show 0878291:submission/airlock-demo.mp4 > airlock-demo.mp4`.
 
-Read this aloud over B's clicks in all three dress runs (Phase 4). Cut any sentence that
-does not land. Write the running clock in the margin as you go.
-
-Bracketed `[X]` values are filled from `results/fpr_report.json` at 16:00 — **not from
-memory, and not from the deck if the deck disagrees with the JSON.**
-
----
-
-## 0:00–0:35 · The problem
-*Nothing on screen but the composer.*
-
-> Every one of your employees has a browser tab open to a model you don't run. The data
-> that leaves through that tab doesn't leave through your firewall — it leaves through a
-> paste. Airlock is a bouncer that sits on the paste.
-
-*(If you are running long, this is the only section you may shorten. Never shorten §7.)*
+Rewritten 2026-10-13. The earlier script described a live demo of the *planned* system —
+a 35B and a 7B model, an image beat that blocks, a cable unplugged on stage, a moving
+threshold slider and a 51% industry comparison. None of those survive measurement. Every
+claim below has a source in `results/` or `evidence/`.
 
 ---
 
-## 0:35–1:10 · Beat 1 — customer list → BLOCKED
+## Before it plays — 20 seconds
 
-**B:** pastes the 12-row `name,email,phone,plan,mrr` block into the ChatGPT composer.
+> Every employee has a browser tab open to a model the company does not run, and company
+> data leaves through it as a paste — not through the firewall. Airlock sits on the paste.
+> It inspects it on the laptop's own hardware, blocks it if it is confidential, and still
+> answers the question locally so nobody is pushed onto their phone.
 
-**On screen:** the text never appears. Scanning chip instantly. Block card: `CUSTOMER_RECORD`,
-the offending row **underlined**, `bytes egressed: 0`, latency in ms.
+## Over the recording
 
-> That never left the laptop. And notice what the block says — it quotes the exact
-> characters that caused it, and we verified that string is literally present in the
-> payload before we blocked. A filter could have caught that one.
+**~20–50 s — customer list, blocked.**
+> A twelve-row customer list. It never reaches the page. The card quotes the exact row
+> that caused the block, and that text was checked to be literally present in the paste
+> before we blocked — if the model can't point at it, we don't block. This decision took a
+> 30-billion-parameter model about three seconds, on the box. Nothing left it.
 
-**Recovery — card doesn't render but console logs a BLOCK:**
-> "The overlay is showing us the verdict in the console instead —" *(point at the log line)*
+**~50–58 s — the score breakdown.**
+> This is why it ranked the way it did: MongoDB fusing a semantic search and a keyword
+> search over our policy examples, with each one's contribution shown. The policy clause it
+> cites is chosen from that retrieval, so it can't invent one.
 
-**Recovery — nothing happens at all:** B pastes the same payload on `localhost:5173`.
-One tab switch, three seconds. Do not narrate the switch.
+**~58–80 s — answered locally.**
+> Blocking alone pushes people to workarounds. So the same question is answered by the
+> same 30B model, on the same machine.
 
----
+**~80–90 s — a benign question goes through.**
+> An ordinary question goes straight into the chat box. That's most pastes.
 
-## 1:10–1:25 · Beat 2 — benign question → sails through
+**~90–100 s — the same list again.**
+> Pasted twice: blocked in about a millisecond from MongoDB's record of the first decision.
+> No model call.
 
-**B:** pastes *"how do I reverse a linked list in Python?"*
-
-**On screen:** appears normally. No overlay. One `ALLOW` line in the console at
-single-digit milliseconds, `tier: T1`.
-
-> No friction. That's the whole game — a control nobody turns off. That one was decided
-> in under a millisecond and never touched a model.
-
-**Recovery — it blocks:**
-> "And there's a false positive. Let me show you exactly how often that happens."
-
-Then go **straight to §7**. A false positive on stage is survivable **if and only if you
-have the denominator.** That is the entire argument for the artifact.
-
----
-
-## 1:25–2:05 · Beat 3 — unreleased revenue chart → BLOCKED
-
-**B:** pastes `fy26_forecast.png`.
-
-**On screen:** chip reads "inspecting image locally". Block card: `FINANCIAL_NONPUBLIC`,
-reason quoting the transcribed title *"FY26 Revenue Forecast"* and the footer
-*"Internal — Do Not Distribute"*.
-
-> No regex catches a picture. That's a seven-billion-parameter vision model reading the
-> chart's title and footer on this box, in [X] milliseconds.
+**~100–115 s — the console.**
+> Every decision streaming live off a MongoDB change stream.
 >
-> And notice it didn't try to read the bars. We deliberately never ask it to read data
-> values off a chart, because that's the thing these models are worst at. We ask it to
-> read the chrome — the title, the footer, the watermark — because that's what actually
-> determines whether a slide is confidential.
+> *If the on-screen recall is noticed: "That recording shows 87.8%. It's wrong — our tooling
+> counted fifty test cases that should be allowed as if they should be blocked. The correct
+> figure is 98.5%, and the error made us look worse, not better."*
 
-**Recovery — it times out:** the fail-closed BLOCK screen renders instead.
-> "And there's the fail-closed path. When the inspector can't reach a verdict, nothing
-> leaves. Deny by default is the product, so it's also the failure mode."
+**~115–121 s — the sandbox evidence.**
+> Inside the agent sandbox, the four big cloud model APIs return "policy denied" at a proxy
+> the sandbox can't touch, and every inference request in the log went to one place: the
+> local model.
 
-**This failure is on-message. Do not apologise for it.**
+## After it ends — the number, 40 seconds
 
-If the pre-recorded fallback is in play, B plays the 15-second clip and you say it is a
-recording, in those words, before it starts.
+> Three pastes is a demo. Here's the measurement. We ran a thousand real, human-written
+> pastes we didn't write — chat prompts, Stack Exchange questions, code problems, consumer
+> complaints, encyclopedia text. Airlock wrongly blocked **4.0%** of them, confidence interval
+> roughly three to five and a half percent. On the code and technical text engineers paste
+> most — four hundred and eighty items — it wrongly blocked **none**.
+>
+> Most of the errors came from one source: consumer complaints where personal details had
+> already been redacted to strings of X's, which the model mistook for card numbers. That's
+> the clearest thing to fix next.
+
+**Do not say** "N times better than the industry average." The figure usually quoted —
+51% — is the share of *alerts* that are wrong, which is a different measurement from ours.
+On a like-for-like basis our alerts land in the same range, depending on how often pastes
+are truly sensitive (`SUBMISSION.md` §2).
 
 ---
 
-## 2:05–2:35 · The sanctioned path
+## Questions, and the answer to give
 
-**B:** clicks **"Answer this on the local model instead."**
+**"Where does the 4% come from — can I check it?"**
+> The corpus, the harness and every per-item score are in the repository. One seeded command
+> rebuilds the corpus.
 
-**On screen:** tokens stream into the overlay from the 35B on the box.
+**"Is your sensitive test set synthetic?"**
+> Yes, so recall is an upper bound. The benign set is real human text, which is why the
+> false-positive rate is the number we stand behind.
 
-> Blocking alone just pushes people to their phones. So the same question gets answered —
-> by a thirty-five-billion-parameter model running eighteen inches away. Nothing about
-> that round trip left the room.
+**"How does that compare with existing DLP?"**
+> Honestly, not as simply as we'd like. The common 51% figure counts wrong alerts; ours counts
+> wrongly blocked pastes. Converted like for like, we're in the same range — better if more
+> than about 4% of pastes are sensitive, worse if fewer. What we add is a number published
+> with its denominator, so it can be checked.
 
-**Recovery — stream stalls:** B closes the panel.
-> "That's the local 35B, and you'll see it live in the terminal in ten seconds."
+**"What about images?"**
+> The image path works end to end — it blocked one of our test charts — but with the 30B
+> vision model on the box it takes 10 to 20 seconds, so it isn't interactive. And our demo
+> chart did *not* block: the model described the confidential markers but wouldn't quote
+> them, so our verification refused to block. We cut it from the recording rather than fake
+> it.
 
-Hand to A's `proof.sh`, which shows both `/v1/models` responding.
+**"Does the local model see the confidential data?"**
+> Yes — the full paste goes to the local 30B so it can answer the actual question. That's the
+> point: it's on the same machine and nothing is sent off it. The decision log keeps an
+> encrypted copy, capped at 8 KB, only so an analyst's correction can be learned from.
 
----
+**"How do we know nothing went to the cloud?"**
+> For the agent sandbox, the platform's own log: one inference endpoint, local; the cloud
+> APIs denied at the proxy. For the host service, the claim is architectural — it only
+> listens on loopback and reports zero bytes sent on every verdict. We planned to prove that
+> part by unplugging the network on stage and never captured it, so we don't claim it.
 
-## 2:35–3:00 · Beat 4 — the detector learns
-### ← **Cut this first if running long.**
-
-**B:** on a fresh block card, clicks **"Mark benign."** Re-pastes the same payload → it
-sails through. Then pastes a *near neighbour* → it still blocks.
-
-> An analyst just corrected it. The payload and its embedding went back into the corpus
-> in MongoDB, and the next paste of that shape passes — while a neighbour still blocks.
-> The detector learned without retraining a model. You cannot do that with a regex.
-
----
-
-## 3:00–3:25 · `policy_denied` and the unplug
-
-**A:** runs the pre-staged `curl` from inside the sandbox. Raw
-`{"error":"policy_denied","rule":...,"endpoint":...}` on screen.
-
-> That's the sandbox layer — deny-by-default egress, five allowlisted endpoints, GitHub
-> blocked. Byte for byte the same JSON the browser renders. Two layers, one denial shape.
-
-**B:** switches to `localhost:5173`. **A unplugs the ethernet.** B pastes the customer
-list again → still blocked. `free -h` and both `/v1/models` visible on A's terminal.
-
-> Cable's out. Still blocking, still answering. There is no cloud in this system.
-
-**The cable goes back in immediately afterwards, before anything else.**
-
-> **NEVER unplug while the `chatgpt.com` tab is focused (R15).** One accidental reload
-> offline and that tab is gone for the rest of the demo.
-
----
-
-## 3:25–4:20 · The number
-### ← **Never cut this. This is why the pitch exists.**
-
-**B:** scrolls the console — hundreds of ALLOW lines — then opens the report panel.
-
-> Three pastes is a demo. Here's the detector.
->
-> We measured a **[X]%** false-positive rate, ninety-five percent confidence interval
-> **[a, b]**, over **[CORPUS_N] benign pastes we did not write** — [CORPUS_SENTENCE].
->
-> *(Read the real counts off `data/benign_v1.manifest.json`, or run
-> `python submission/fill.py` which substitutes them. **Do not read the numbers that
-> were in the plan** — the first real build produced a different mix because one
-> source's API had been retired and its share was redistributed. Saying "a hundred and
-> twenty consumer-finance complaints" when there are none is the one mistake on this
-> page that a judge could call fabrication.)*
->
-> The published industry average for DLP false positives is fifty-one percent.
-
-**B:** drags the threshold slider 0.55 → 0.30. FPR and recall move live.
-
-> Every DLP product has this dial. The difference is where it lives. On a cloud DLP you
-> file a ticket and wait a quarter, and you never see the curve. Here the curve is on
-> your desk — because the corpus and the inference are both on the box.
-
-**Recovery — slider misbehaves:** read the three-row table off the deck.
-**The number is the asset; the slider is the flourish.**
-
-### If asked "is your sensitive set synthetic?" — deliver this verbatim:
-
-> Our sensitive set is synthetic, so recall is an upper bound. Our benign set is
-> human-written, so **FPR is the number we stand behind.**
-
-### If asked "how do you know those aren't just easy negatives?"
-
-> Thirty-six of them are hard negatives we wrote to break it — published Stripe test
-> cards, `AKIAIOSFODNN7EXAMPLE`, placeholder keys, git SHAs, a 10-Q excerpt, and questions
-> *about* credit-card regexes that contain no card. That bucket is reported as its own
-> line, not folded into the total.
-
----
-
-## 4:20–5:00 · The box, and the close
-
-**A:** `stack/proof.sh` on screen.
-
-> `nvidia-smi` won't show you a VRAM bar on this machine. That's not a bug — there is no
-> VRAM. The thirty-five-billion-parameter text model and the seven-billion-parameter
-> vision model are both resident, right now, in the same hundred and twenty-eight
-> gigabytes the operating system is running in.
->
-> On a twenty-four-gigabyte discrete GPU neither fits next to the other, and you'd be
-> swapping over PCIe between every paste. Here there is no PCIe to swap across.
->
-> NVIDIA's own reference recipe for this exact text model runs at forty percent memory
-> utilisation. We're at sixty-four percent with two models and **[Y]** gigabytes still free.
->
-> At the measured throughput that's **[Z] seats per box**, bound by the vision path, at a
-> hundred and sixty watts — about three hundred and fifty euros a year of electricity for
-> the whole fleet.
->
-> That's how you get to Dell's eighty-seven percent number: you stop paying per token, and
-> you stop paying the interruption tax.
-
----
-
-# Anticipated questions
-
-**"Why not just block the sites?"**
-> Then people use their phones, and you've lost both the data and the visibility. Airlock
-> answers the question locally, which is the only version of this control that survives
-> contact with employees.
-
-**"What about screenshots, or photographing the screen?"**
-> Out of scope, and we say so in the submission. We intercept the clipboard payload. A
-> camera pointed at a monitor is a different threat model and we don't claim it.
-
-**"Does the agent see the confidential data?"**
-> No. The agent gets the verdict record and the question with the confidential spans
-> already removed. It has no network tools and it cannot request the original payload.
-
-**"How do we know nothing was called remotely?"**
-> We don't ask you to take our word for it. Every inference call emits an OCSF record
-> naming its provider URL. `evidence/rule02-providers.txt` is a `jq` over the full run:
-> one provider, `host.openshell.internal`, zero cloud hosts. And the egress denial is
-> enforced at the proxy, outside the sandbox, where the agent cannot reach it.
-
-**"What's your worst class?"**
-> *(Name it from the by-class table without hesitating.)* Publishing the weak one is what
-> makes the strong ones believable.
-
-**"What would you do with another day?"**
-> Calibrate the image path properly — the image FPR has a much smaller denominator than
-> the text one, and we report them separately rather than averaging them into something
-> flattering.
-
----
-
-# Timing discipline (Phase 4)
-
-| Beat | Budget | Cumulative |
-|---|---|---|
-| Problem | 0:35 | 0:35 |
-| Beat 1 — customer list | 0:35 | 1:10 |
-| Beat 2 — benign | 0:15 | 1:25 |
-| Beat 3 — image | 0:40 | 2:05 |
-| Sanctioned path | 0:30 | 2:35 |
-| Beat 4 — learns | 0:25 | 3:00 |
-| `policy_denied` + unplug | 0:25 | 3:25 |
-| **The number** | **0:55** | **4:20** |
-| The box + close | 0:40 | 5:00 |
-
-**Cut order if over at the dress run (R17):** beat 4 first, then the sanctioned path.
-**Never the number.**
-
-Dress run over 4:45 → cut immediately, do not "try to talk faster".
+**"What would you do next?"**
+> Strip redaction masks like `XXXX` before classification — that's the biggest error class.
+> Re-run the evaluation with the scoring fix we made after the run, so the threshold
+> actually does something. And a smaller vision model so images are interactive.

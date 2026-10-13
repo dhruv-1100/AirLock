@@ -23,8 +23,8 @@ T0's gate is `len < 40` with no digit and none of `@ : / =`. `benign_v1` has a 2
 floor, so **T0 cannot fire on it by construction** — that is a corpus property, not a
 detector result. Equally, a 40-item authored probe is not a denominator.
 
-**What we can say:** the fast path works and costs ~5 ms end to end, and the FPR of
-6.90% is conservative precisely because every one of those 1000 items reached the model —
+**What we can say:** the fast path works and costs ~5 ms end to end, and the FPR (6.90% when this
+was written; 4.00% in the final run) is conservative precisely because every one of those 1000 items reached the model —
 nothing was waved through by a cheap gate.
 
 **What we cannot say:** any blended escalation rate, blended latency, or seats-per-box

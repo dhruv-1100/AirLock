@@ -1,32 +1,34 @@
 <!--
   submission/SUBMISSION.md — owner C. SRS §14.
 
-  THE TOP 8 IS CHOSEN AT 18:00 FROM THIS DOCUMENT ALONE, with nobody in the room to
-  explain anything. Assume a skimming reader who reads the first 200 words and the
-  tables, then decides whether to read the rest.
+  Every double-brace placeholder is filled from results/fpr_report.json and the corpus
+  manifest by:   python submission/fill.py   ->   submission/SUBMISSION.final.md
 
-  EVERY double-brace placeholder is filled from results/fpr_report.json by:
+  Numbers written out literally below are each followed by the artifact they come from,
+  and submission/check_claims.py verifies every one of them against that file.
 
-      python submission/fill.py
-
-  Do not type numbers in by hand. The 17:30 check is "does any number in the prose
-  disagree with fpr_report.json?" — fill.py makes that check vacuous by construction.
-
-  Prose was written in Phase 2. Phase 3 is fill-in-the-blanks. SUBMIT BY 17:45.
+  Rewritten 2026-10-13 after the GB10 became unavailable. The previous draft described
+  the PLANNED system (Qwen 35B, Holo 7B, a 4B classifier, a throughput sweep, a
+  calibration fit, an ablation table). Several of those never ran. This version claims
+  only what was measured, and says plainly what was not.
 -->
 
 # Airlock — the bouncer that sits on the paste
 
 **Airlock intercepts the clipboard payload the moment company data is about to leave a
-laptop for an unapproved cloud AI tool, inspects it locally on the GB10, blocks it with a
-cited policy clause, and re-routes the question to a 35B model on the box so the employee
-still gets an answer.**
+laptop for an unapproved cloud AI tool, inspects it locally on a Dell Pro Max with GB10,
+blocks it with a cited policy clause, and re-routes the question to a 30B model on the
+same box so the employee still gets an answer.**
 
 We measured a **{{FPR_HEADLINE}}** false-positive rate over **{{N}} benign pastes we did
 not write**, drawn from {{N_SOURCES}} independently-licensed public sources of real
-human-written text. The published industry average for DLP false positives is **51%**.
+human-written text — with the corpus, the harness and every per-item score published, so
+the number can be reproduced from one seeded command.
 
-That number is the submission. Everything else is how we got it and why it holds.
+That number is the submission. Everything else is how we got it, what it does and does not
+license — including why it does **not** support a simple "N times better than industry"
+claim — and, because the hardware is no longer available to us, exactly which planned
+measurements were never taken.
 
 <!-- THREE SCREENSHOTS ABOVE THE FOLD — SRS §14 -->
 ![Block card with the verified evidence span underlined](../screenshots/verdict-card.png)
@@ -45,13 +47,12 @@ a TLS session to a domain the company has no reason to block.
 The control that would work — inspect the payload before it leaves the endpoint — has
 been impractical for one reason: doing it well needs a language model, and sending every
 paste to a cloud model to check whether it should go to a cloud model is absurd. So the
-industry ships regexes, and regexes produce the 51% false-positive rate that makes
-employees route around the control entirely.
+industry ships pattern matchers, which produce the false-positive rates that make employees
+route around the control.
 
 **A 128 GB unified-memory box changes the arithmetic.** The inspection model can live on
-the endpoint. That is the whole thesis, and it is testable: if local inspection cannot get
-the false-positive rate low enough to be left switched on, the idea fails. So we measured
-it.
+the endpoint. That is the thesis, and it is testable: if local inspection cannot get the
+false-positive rate down, the idea fails. So we measured it.
 
 ---
 
@@ -63,10 +64,11 @@ it.
 |---|---|
 | **False-positive rate** | **{{FPR_STATEMENT}}** |
 | Denominator | {{N}} benign pastes, {{N_SOURCES}} sources, none written by us |
-| Threshold | {{THRESHOLD}} (Balanced) — selected on dev, reported on test |
-| Latency p50 / p95 | {{P50}} ms / {{P95}} ms |
-| Escalation rate (reached a model at all) | {{ESCALATION}} |
+| Threshold | {{THRESHOLD}} — the design default, fixed before the run. **Not tuned on this corpus**; there was no dev/test split. |
 | Recall (synthetic sensitive set) | {{RECALL_STATEMENT}} |
+| Hard negatives wrongly blocked | {{HARD_NEGATIVE_RESULT}} |
+| Latency p50 / p95 | {{P50}} ms / {{P95}} ms — **under the harness's concurrency of 8**, so it includes queueing. It is not the latency of a single interactive paste. |
+| Reached a language model | {{ESCALATION}} of pastes — see "which tier resolved each paste" below |
 
 Reproduce, verbatim:
 
@@ -76,97 +78,120 @@ python bench/run_fpr.py --seed 1337 --n 1000 --threshold 0.55
 python bench/report.py
 ```
 
-### Precision at prevalence — why FPR matters more than recall
+### What the number does and does not mean
 
-At a 2% prevalence of genuinely sensitive pastes, with our measured recall and FPR,
-precision is **{{PRECISION_AT_2PCT}}**. Hold recall constant and raise the false-positive
-rate to 3% and precision collapses to **{{PRECISION_AT_3PCT_FPR}}**.
+**A false-positive rate is not the same thing as the share of alerts that are wrong.**
+Our 4.00% is the share of *benign pastes* that get blocked. The figure usually quoted for
+DLP — a vendor survey of 300 security leaders reporting that **51% of DLP alerts are false
+positives** ([Cyberhaven](https://www.cyberhaven.com/blog/dlp-false-positives)) — is the
+share of *blocks* that are wrong. Dividing one by the other would be meaningless, and an
+earlier draft of this document did exactly that. We withdraw that comparison.
 
-That is the entire argument. A detector at 3% FPR is wrong more often than it is right,
-and a control that is wrong more often than it is right gets switched off — after which
-its recall is zero, whatever the datasheet said.
+The like-for-like number is our share of wrong blocks, and it depends on how often a paste
+is genuinely sensitive — which we do not know for real traffic:
 
-### Corpus provenance
+| If this share of pastes is sensitive | share of our blocks that are wrong |
+|---|---|
+| 1% | 80.1% |
+| 2% | 66.6% |
+| 5% | 43.6% |
+| 10% | 26.8% |
 
-{{CORPUS_TABLE}}
+**We match the survey's 51% at a prevalence of about 3.8%** — better above that, worse below.
+So on the evidence we have, Airlock's alerts are in the same range as the industry's, not
+clearly better. (And the survey describes real deployments while our figures are computed
+from a benchmark, so even that comparison is only indicative.)
 
-Multiple independent sources, so no single licence challenge can sink the denominator.
-Where a source was unavailable at build time its share was redistributed across the
-others and the manifest records the actual counts — the table above is what was used,
-not what was planned. The corpus is regenerable from one seeded command; full per-record provenance
-(`id, source, licence, sha256, char_len, provenance_url`) is in
-`data/benign_v1.manifest.json` and `data/ATTRIBUTION.md`.
-
-### Which tier resolved each paste — and what that does to the throughput numbers
-
-{{TIER_MIX_TABLE}}
-
-**We are stating this before anyone finds it.** Our benign corpus has a 200-character
-floor. The T0 fast path fires only below 40 characters. So **T0 cannot fire on this
-corpus by construction** — measured: 0 of 1000 items resolved at T0, and essentially the
-entire corpus escalated to the language model.
-
-That cuts two ways, and we report both:
-
-- **It makes the false-positive rate stronger, not weaker.** Every item reached the
-  classifier. Nothing was cheaply resolved by a length check before the model saw it. The
-  FPR above is measured entirely on the hard subset, which is the conservative direction.
-- **It makes our throughput figures unrepresentative.** Escalation rate, blended latency
-  (NFR-L8) and seats-per-box (NFR-T7) all scale with the fraction of pastes that reach a
-  model. Measured on a corpus that excludes short pastes entirely, those three numbers
-  describe a worst case, not a realistic deployment. **We do not claim the ~14%
-  escalation the design assumed.** Where those numbers appear below, they carry this
-  caveat.
-
-To show the fast path works rather than reporting one we never exercised, we ship a
-separate **T0 probe set** (`data/shortpaste_v1.jsonl`) of short benign pastes that do
-satisfy the gate. It is reported as its own line and is **never merged into the n=1000
-denominator**:
-
-{{T0_PROBE_RESULT}}
-
-A realistic paste distribution contains a great many short messages, so a deployed
-Airlock would resolve a substantial share at T0 for roughly a millisecond each. We have
-not measured that share on real traffic, and we do not assert it.
+What we can claim is narrower and still worth something: a false-positive rate published
+**with its denominator, its corpus, and its per-item scores**, so it can be checked —
+which a single survey percentage cannot be. Our design target was under 1%; **we did not
+reach it**, and at 4% Airlock is not good enough to block silently. That is why the block
+card always offers to answer the question on the local model instead of simply refusing,
+and why an Audit mode exists.
 
 ### Hand-adjudication of every false positive
 
-{{ADJUDICATION}}
+All 40 blocks were reviewed individually. Full table with a reason per item:
+`results/adjudication.md`.
 
-Every false positive is itemised in `results/false_positives.md` with its `p_block`, tier,
-predicted label and evidence span. We adjudicated each one by hand rather than reporting a
-raw count, because a benign corpus scraped from the internet contains real secrets that
-their authors pasted, and counting those against the detector would understate it.
+| | n |
+|---|---|
+| Correct blocks — the "benign" corpus contained a live-format credential (a Shopify `shpat_` token, an X/Twitter bearer token) | 2 |
+| Fail-closed timeouts — the inspector failed closed; not a classifier decision | 2 |
+| Borderline — fictional named-patient narratives that match POL-005's surface form | 3 |
+| **Genuine classifier errors** | **33** |
+
+**After removing the two correct blocks: 38/1000 = 3.80% [2.78%, 5.17%].** Genuine
+classifier errors alone: 33/1000. We keep 4.00% as the headline because it is what a user
+experiences, timeouts included.
+
+**This review was done by one reviewer and has not been confirmed by a second.** We make
+no inter-rater agreement claim.
+
+**What the errors are, and what we got wrong about them.** 12 of the 33 genuine errors fired
+on CFPB's `XXXX` redaction masks — CFPB publishes complaint narratives with personal details
+already replaced by `XXXX`, and the classifier read runs of `XXXX` as card numbers or social
+security numbers, despite its prompt listing `XXXX` as placeholder data. A further 13 are
+ordinary consumer credit-dispute letters labelled LEGAL_HR. **We had previously argued that
+CFPB blocks were defensible because the narratives "contain identifiers". They do not —
+CFPB redacts them. That argument was wrong.**
 
 ### Per-source false-positive contribution
 
 {{BY_SOURCE_TABLE}}
 
-Our worst source is named in that table. Publishing the weak one is what makes the strong
-ones believable.
+**Zero false positives across the 480 Stack Exchange, Wikipedia, MBPP and HumanEval items**
+— the code and technical prose engineers paste most. CFPB is our worst source by a wide
+margin, for the redaction-mask reason above.
+
+### Corpus provenance
+
+{{CORPUS_TABLE}}
+
+The corpus is regenerable from one seeded command. Per-record provenance
+(`id, source, licence, sha256, char_len, provenance_url`) is in
+`data/benign_v1.manifest.json` and `data/ATTRIBUTION.md`. All 1000 SHA-256 values verify
+against the text.
+
+### Which tier resolved each paste
+
+{{TIER_MIX_TABLE}}
+
+**Stated before anyone finds it.** The benign corpus has a 200-character floor; the T0 fast
+path fires only below 40 characters. **T0 cannot fire on this corpus by construction**, so
+essentially every item reached the language model.
+
+That cuts two ways:
+
+- **It makes the false-positive rate conservative.** Nothing was waved through by a length
+  check before the model saw it.
+- **It makes any throughput claim from this corpus unrepresentative.** Escalation rate,
+  blended latency and seats-per-box all scale with the share of pastes that reach a model.
+  We do not report a blended escalation rate.
+
+To show the fast path works rather than claiming one we never exercised, a separate set of
+40 short pastes written to satisfy the T0 gate was run against the live service: **40 of 40
+resolved at T0, p50 4.8 ms, p95 6.7 ms, HTTP round trip included** (`results/t0_fastpath.md`).
+That set is authored by us and is never merged into the denominator — it shows the path
+works, not how often real traffic takes it.
 
 ### Recall by class
 
 {{BY_CLASS_TABLE}}
 
-**Honest framing, stated before anyone asks:** our sensitive set is synthetic, so recall
-is an upper bound. Our benign set is human-written, so **FPR is the number we stand
-behind**. Every synthetic artefact is embedded in one of 22 carrier templates — a Slack
-message, a Jira ticket, a stack trace — never a bare PAN, because a detector tested only
-on bare artefacts has been tested on a distribution that does not exist.
+**Our sensitive set is synthetic, so recall is an upper bound. Our benign set is
+human-written, which is why the false-positive rate is the number we stand behind.** Every
+synthetic artefact is embedded in one of 22 carrier templates — a Slack message, a Jira
+ticket, a stack trace — never presented bare.
 
-### The hard-negative bucket
+The sensitive corpus also carries **50 hard negatives**, labelled BENIGN: published Stripe
+test cards (one probe per card), `AKIAIOSFODNN7EXAMPLE`, `your-api-key-here`, git SHAs,
+UUIDs, a 10-Q excerpt, and questions *about* credit-card formats that contain no card. They
+are reported on their own line in the headline table, never mixed into recall.
 
-{{HARD_NEGATIVE_RESULT}}
-
-Thirty-six items designed to trip a naive detector, labelled BENIGN and reported
-separately: published vendor test cards, `AKIAIOSFODNN7EXAMPLE`, `your-api-key-here`, git
-SHAs, UUIDs, a 10-Q excerpt, and questions *about* credit-card regexes that contain no
-card. This bucket is where a regex and a detector separate.
-
-### Inter-rater check
-
-{{INTER_RATER}}
+> **Correction.** An earlier version of our tooling put those 50 hard negatives in the
+> recall denominator and reported recall as 87.78% (395/450). The correct figure is above.
+> Recomputed from the run's own per-class counts; covered by a regression test.
 
 ### The aggregation that computes it
 
@@ -187,162 +212,141 @@ db.benign_eval.aggregate([
 
 ```
 paste
- ├─ CACHE  sha256(payload) already in `decisions` → replay verdict      (~1 ms)
- ├─ T0     len<40, no digit, none of {@ : / =}    → ALLOW               (~0.01 ms)
- ├─ T1     deterministic scan                                           (~0.3 ms)
- │           HIGH (Luhn+context | PEM | provider-prefix+entropy) → BLOCK, no LLM
- │           LOW | structural | nothing ─────────────┐
- ├─ T2     Qwen3-4B, guided JSON, span-verified ◄────┘             (~200–400 ms)
- └─ T3     image: VLM transcribes chrome → re-run T1+T2 on the text  (~0.9–1.6 s)
+ ├─ CACHE  sha256(payload) already seen → replay the verdict
+ ├─ T0     len<40, no digit, none of @ : / =  → ALLOW         measured p50 4.8 ms
+ ├─ T1     regex + Luhn + entropy, deterministic
+ │           HIGH → BLOCK with no model call
+ │           anything else ──────────────────┐
+ ├─ T2     Nemotron-3.5-Lightning-30B, guided JSON, span-verified ◄┘
+ └─ T3     image: Nemotron-3-Nano-Omni-30B transcribes the chart's text → T1 + T2
 ```
 
-**A router, not an AND-cascade.** An AND-cascade caps recall at T1's, which is
-approximately zero for `FINANCIAL_NONPUBLIC` — no regex matches an unreleased forecast.
-T1-HIGH is the only tier permitted to block without a model, and it is therefore
-checksum-gated only: its false positives pass straight through to the reported total
-rather than being filtered by a later stage.
+**A router, not an AND-cascade.** An AND-cascade caps recall at T1's, which is near zero
+for unreleased financials — no regex matches a forecast. T1-HIGH is the only tier allowed
+to block without a model.
 
-### Span verification — the mechanism, not a vibe
+**T1 alone, measured offline:** zero T1-HIGH blocks across the 1000 benign pastes (below
+0.30% by the rule of three; `results/t1_offline.json`), and 105 of the 400 sensitive
+items blocked with no model call at all — with none of the 50 hard negatives
+(`results/t1_offline_sensitive.json`).
 
-Every non-BENIGN verdict from T2 or T3 must include an evidence span copied
-character-for-character from the payload. If that string cannot be found in the payload —
-after a whitespace-normalised second pass — the verdict is **forced to BENIGN** and logged
-as `override:"unverified_evidence"`.
+### Span verification — the mechanism
 
-Override rate: **{{OVERRIDE_RATE}}**.
+Every non-BENIGN verdict from T2 or T3 must quote characters that appear verbatim in the
+payload. If the quoted string is not there — after a whitespace-normalised second pass — the
+verdict is forced to BENIGN and logged as `override: "unverified_evidence"`.
 
-This is a deliberate fail-open, and it is the only one on the text path. The reasoning: a
-model that cannot point at the characters that made it block did not find anything; it
-produced a plausible label. Blocking on that is how DLP products earn their reputation.
-The image path has the analogous rule — a non-BENIGN image verdict with no temporal
-marker, no confidentiality marker and no T1 hit over the transcribed text is forced to
-BENIGN as `override:"no_grounded_marker"`.
+Measured on the benign run: **{{OVERRIDE_RATE}}.**
 
-### The ablation table
+This is a deliberate fail-open. A model that cannot point at the characters that made it
+block did not find anything; it produced a plausible label. The image path has the same
+rule.
 
-{{ABLATION_TABLE}}
+### The image path — what actually happened
 
-Row 3 minus row 2 is span verification in isolation.
+The vision tier reads a chart's *text* — title, axis labels, legend, footnotes, watermarks —
+and is told never to read values off the bars, which is where vision models are least
+reliable. It ran end to end against the live model (`results/t3_latency.md`):
 
-### Why the vision model reads the chrome and not the bars
+| image | verdict | latency |
+|---|---|---|
+| `fy26_forecast.png`, first call | allow BENIGN | 12,995 ms |
+| same image, second call | allow BENIGN, from cache | 1 ms |
+| `gate_00.png` | 504, timed out | 19,909 ms |
+| `gate_01.png` | **block FINANCIAL_NONPUBLIC**, 1 evidence span | 10,013 ms |
 
-The T3 prompt transcribes title, axis labels, legend, column headers, footnotes,
-watermarks and filenames — and is **explicitly forbidden from reading data values off bars
-or lines**. `FINANCIAL_NONPUBLIC` then requires *both* financial vocabulary *and* a
-forward-looking or internal marker in the transcribed text.
+Two honest findings:
 
-This routes around every documented VLM chart failure mode. OCRBench v2 scores 54.3 EN:
-fine-grained value reading is not reliable. Chrome text is. And chrome is what actually
-determines confidentiality in a real deck — "FY26 Revenue Forecast" and "Internal — Do Not
-Distribute" are the sensitive part, not the height of the third bar.
+- **The demo chart did not block.** The model transcribed "FY26 Revenue Forecast" correctly
+  and described its reasoning in prose — but put no quoted text in `evidence_spans`, so span
+  verification forced BENIGN. That is the mechanism working as designed: it refused to block
+  on something the model would not point at. It also means the image beat was cut from our
+  recorded demo rather than faked.
+- **10 to 20 seconds per image.** The latency budget was sized for a 7B vision model; the
+  model on the box was a 30B. The browser gives up at 2.5 s and fails closed, so a pasted
+  image in the browser always shows the "inspector unavailable" card, never a verdict. With
+  this model the image path is not interactive.
+
+### Not measured — the ablation
+
+The plan was a four-row ablation: T1 only; T2 without span verification; T2 with it; the
+full router. **Only row 1 exists** (above). Rows 2–4 needed live model runs and were not
+taken before hardware access ended.
 
 ---
 
-## 4. Local-first — enforced in four layers, not asserted
+## 4. Local-first — enforced at the sandbox, demonstrated at the host
 
-**We do not claim no remote LLM was called. We enforce it, and we attach the log.**
+**For the agent sandbox, we do not assert that no remote model was called — we show it from
+the platform's own log.** `evidence/rule02-providers.txt`, captured from the OpenShell log
+for sandbox `airlock`:
 
-1. **OpenShell egress is deny-by-default.** No allow rule names `api.openai.com`,
-   `api.anthropic.com`, `generativelanguage.googleapis.com` or `integrate.api.nvidia.com`.
-   Those hosts return `403 policy_denied` at the proxy — enforced *outside* the sandbox and
-   unmodifiable from within it.
-2. **`inference.local` is a whitelist of request shapes, not a hostname allowance.** The
-   Privacy Router strips sandbox-supplied credentials, injects the gateway's, rewrites the
-   model, and denies non-inference requests.
-3. **The inference route is gateway-scoped and set from the host.** The sandbox's own
-   `model` and `api_key` are discarded before anything leaves.
-4. **Every inference call emits an OCSF v1.8.0 `class_uid: 6003` record naming its
-   provider URL.** `evidence/rule02-providers.txt` is the output of
-   `jq -r 'select(.class_uid==6003) | .ai_model.ai_provider' | sort | uniq -c` over the
-   full run:
+- **Every inference request went to one endpoint:** 4 requests, all to
+  `http://172.17.0.1:8000/v1` — the vLLM serving Nemotron-3.5-Lightning-30B from local
+  weights. Zero cloud providers.
+- **The only host the sandbox opened was `inference.local`** — the gateway's router, which
+  forwards to that local endpoint.
+- **The four cloud model APIs are denied at the proxy:** `api.openai.com`,
+  `api.anthropic.com`, `generativelanguage.googleapis.com`, `integrate.api.nvidia.com` each
+  returned `403 {"error":"policy_denied"}` (`evidence/policy-denied.json`). Nothing in the
+  policy allows them, and the policy lives outside the sandbox where code inside cannot
+  change it.
+- **The sandbox cannot repoint inference.** A request from inside asking for model
+  `ignored-by-router` came back as `airlock-text` — the router discards the sandbox's
+  choice of model.
 
-   ```
-   {{RULE02_PROVIDERS}}
-   ```
-
-   One provider. Zero cloud LLM hosts. Zero denied-egress events to any inference endpoint.
-
-We also removed two rules from NVIDIA's own baseline rather than only adding our own — the
-platform required a written feature-impact disclosure to do it, and the resulting exclusion
-record is versioned, bound to the baseline it was reviewed against, and replayed on every
-rebuild, failing closed if that baseline changed (`policy/exclusions.md`).
-
-### The offline demonstration
-
-The ethernet cable comes out, on stage, and the demo keeps working — blocking and
-answering. `free -h` and both `/v1/models` responses are on screen with the cable visibly
-out.
-
-Stated honestly: the host has a network. Our claim is not that the laptop is airgapped. It
-is that (a) the inspection path never uses the network and reports `bytes_egressed: 0` on
-every verdict, and (b) the agent runtime is denied egress at the proxy, outside its own
-control — and (b) is the machine-checkable one.
+**The honest limit, stated in the evidence file itself:** all of that governs the sandbox.
+The host-side classifier calls its model over loopback and sits outside OpenShell's
+enforcement entirely. For the host, the claim is architectural — the inspect service binds
+127.0.0.1 only, links no cloud SDK, and every verdict reports `bytes_egressed: 0`. We planned
+to demonstrate it by unplugging the ethernet cable mid-demo; **that demonstration was not
+captured**.
 
 ---
 
 ## 5. The box
 
-### Memory budget
+### Memory, as measured
 
-| Process | `--gpu-memory-utilization` | ≈ GB | Contents |
-|---|---|---|---|
-| vLLM text `:8000` — Qwen3.6-35B-A3B-NVFP4 | 0.40 | 51.6 | weights ~22 + FP8 KV ~26 + graphs ~3 |
-| vLLM vision `:8001` — Holo1.5-7B BF16 | 0.24 | 31.0 | weights ~16.5 + KV ~9 + MM caches ~2 + graphs ~3 |
-| **Sum reserved by CUDA** | **0.64** | **~82.6** | hard ceiling **0.85** |
-| MongoDB (`--memory=6g --cpus=4`) | — | 6.0 | mongot JVM ≈ 25% of the cgroup ≈ 1.5 GB heap |
-| bge-small + reranker (CPU, ONNX Runtime) | — | 1.7 | 20 Arm cores, **no GPU process** |
-| OS + desktop + docker + page cache | — | ~14 | |
-| **Total** | | **~104** | vs a **126.5 GB** host-crash ceiling |
+Read from `nvidia-smi --query-compute-apps` and `/proc/meminfo` with both models resident
+and warm (`results/proof_*.log`):
 
-Headroom: **{{HEADROOM}}**.
+| Process | `--gpu-memory-utilization` | Resident |
+|---|---|---|
+| vLLM text `:8000` — Nemotron-3.5-Lightning-30B-A3B, NVFP4 | 0.40 | 47,847 MiB |
+| vLLM vision `:8001` — Nemotron-3-Nano-Omni-30B-A3B, BF16 | 0.28 | 35,325 MiB |
+| MongoDB container (6 GB cgroup) | — | 910 MiB |
+| **MemAvailable with everything loaded** | | **25.06 GB** of 121.63 GB |
 
-**NVIDIA's own flagship recipe for this exact text model runs at 0.40. We run two models
-at 0.64 with room left.** That is the unified-memory argument in one line: on a 24 GB
-discrete GPU neither model fits beside the other, and you would swap over PCIe between
-every paste. Here there is no PCIe to swap across.
+Two 30B models, a database and the operating system, resident at once in one memory pool,
+with 25 GB still free. (Process-to-model mapping is by utilisation fraction.) On a 24 GB
+discrete GPU neither model would fit beside the other.
 
 ### `nvidia-smi` shows no memory bar, and that is correct
 
-GB10 is an integrated GPU with no framebuffer. NVIDIA documents `Memory-Usage: Not
-Supported`. Memory state is read from `nvidia-smi --query-compute-apps` plus `/proc/meminfo`
-`MemAvailable` and `SwapFree`. **No VRAM bar appears anywhere in this document**, because
-there is no VRAM to bar-chart. `results/proof_*.log` is the artifact.
+GB10 is an integrated GPU with no separate framebuffer, and `nvidia-smi` reports total memory
+as `[N/A]` by design — the proof log shows exactly that. Memory state comes from the
+per-process figures and `/proc/meminfo` above. **No VRAM bar appears in this document.**
 
-### The hidden multimodal-cache finding
+### Not measured — throughput and seats per box
 
-vLLM's multimodal caches default to 4 GiB and 8 GiB and are **duplicated per API process
-and per engine-core process**. They live in what the docs call "CPU RAM" — which on a
-unified-memory box is *the same physical pool the model weights are in*. Left at defaults
-across two servers this silently consumes 15–20 GB that appears in no GPU memory
-accounting.
+The plan included concurrency sweeps for text and vision, an images-per-second figure, and a
+seats-per-box estimate built from them. **None was run.** We do not report throughput, and
+we do not report seats per box or cost per seat, because both are derived from the sweep.
 
-The fix is two flags: `-e VLLM_MM_INPUT_CACHE_GIB=2` and `--mm-processor-cache-gb 1`.
-
-**We have not found this written down anywhere in the DGX Spark literature.** It is the
-single most useful operational finding in this project for anyone else running two models
-on one of these boxes.
-
-### Throughput
-
-{{THROUGHPUT_TABLE}}
-
-**Vision is prefill-bound and scales 1.5–2.5× from c=1 to c=8, then flattens.** We state
-that before showing the data. The vision sweep was run twice — once idle, once with the
-35B under c=8 load — and **both columns are published**, because decode is bandwidth-bound
-and every process shares 273 GB/s. A benchmark that shows its own degradation is more
-credible than one that does not.
-
-**First measured VLM image-inspection throughput on NVIDIA GB10:** {{IMAGES_PER_SEC}}. No
-first-party number for this exists. The naive literature baseline we designed around is
-413 s/image.
+Multimodal cache sizes were capped at launch on the advice of our design document, which
+estimated the defaults could hold 15–20 GB of memory invisible to GPU accounting. We did not
+measure what the defaults would have consumed, so we present that as configuration, not as a
+finding.
 
 ---
 
 ## 6. Why MongoDB is load-bearing and not decorative
 
-Time-series collections support neither change streams nor Search nor CSFLE. No single
-collection can be searchable, watchable, and time-series. So the data model is a
-deliberate three-way split by access pattern, plus an isolated harness collection:
+Time-series collections support neither change streams nor Search nor client-side
+encryption. No single collection can be searchable, watchable and time-series. So the data
+model is a deliberate three-way split by access pattern, plus an isolated harness
+collection:
 
 | Collection | Type | Why it must be this type |
 |---|---|---|
@@ -351,128 +355,109 @@ deliberate three-way split by access pattern, plus an isolated harness collectio
 | `inspect_metrics` | **time-series** | append-only telemetry; columnar buckets, `$setWindowFields`, TTL |
 | `benign_eval` | regular | a 1000-doc harness burst would roll the single-node oplog and kill the console's resume token |
 
-- **Vector Search** (384-d cosine, bge-small) — semantic memory: exemplars of what
-  "sensitive" looks like. This *is* the detector for classes no regex reaches.
+- **Vector Search** (384-d cosine, bge-small on CPU) — semantic memory: exemplars of what
+  "sensitive" looks like.
 - **`$search`** — recovers exact tokens (`FY26`, `Do Not Distribute`) that embeddings blur.
-- **`$rankFusion` + `scoreDetails`** — one server-side call fuses both signals *and*
-  returns the per-signal audit trail. We render it verbatim in the block card: rank,
-  weight, per-pipeline contribution, and the server's own plain-English description of the
-  RRF formula. **That is an auditable explanation rather than a black-box BLOCK.**
-- **Change streams** — the console is push, not poll.
-- **Time-series + `$setWindowFields` + TTL** — bucketed columnar telemetry with
-  rate-over-time windows and automatic expiry.
-- **Hash index on `decisions.payload_sha256`** — the semantic-cache pattern applied to
-  security: the second identical paste blocks in ~1 ms with no model call.
-- **Write-back to `policy_corpus`** — procedural memory. An analyst marks a false positive
-  benign, its embedding is written back, the next paste of that shape passes, and a near
-  neighbour still blocks. **The detector learns without retraining a model.** Live,
-  visible, and impossible with a regex.
+- **`$rankFusion` + `scoreDetails`** — one server-side call fuses both signals and returns
+  the per-signal audit trail, rendered in the block card: rank, weight, contribution.
+- **Change streams** — the console is push, not poll, and survives the collection being
+  dropped and re-seeded.
+- **Hash index on `decisions.payload_sha256`** — a second identical paste replays its
+  verdict without a model call (seen in the image table above: 1 ms).
+- **Write-back to `policy_corpus`** — an analyst marks a false positive benign; its
+  embedding goes back into the corpus, so the next paste of that shape passes while a near
+  neighbour still blocks. The detector learns without retraining a model.
 
-The top-3 retrieved `clause_id`s become the constrained enum for the classifier's guided
-JSON output, **so the cited policy clause cannot be hallucinated.**
-
-Retrieval for the FP harness uses `exact: true` ENN unconditionally. The corpus is a few
-thousand documents, ENN needs no `numCandidates`, and the number must be reproducible when
-a judge asks us to re-run it — ANN recall jitter would make the same benign paste block on
-one run and pass on the next.
+The top-3 retrieved clause IDs become the allowed values for the classifier's cited clause,
+**so the cited policy clause cannot be invented.**
 
 ---
 
 ## 7. Usefulness
 
-### Seats per box
-
-{{SEATS_ARITHMETIC}}
-
-`seats = min(seats_vision, seats_text)`, and we name which binds. Assumptions on the page:
-P = 40 pastes per employee per 8-hour day, peak factor 4×, measured image fraction
-`f_img = {{F_IMG}}`, measured escalation rate {{ESCALATION}}.
-
-### Cost
-
-160 W at the wall is roughly €350/year of electricity for the whole box. Divided by
-{{SEATS}} seats, against per-seat cloud DLP licensing plus per-token cloud LLM API spend.
-
-**We earn the 87% figure rather than quoting it:** you stop paying per token, and you stop
-paying the interruption tax.
-
 ### The interruption tax
 
-5,000 employees × 40 pastes/week = 200,000 pastes. At the published 51% industry
-false-positive average that is **102,000 wrong interruptions a week**. At our measured
-rate it is **{{INTERRUPTIONS}}**.
+5,000 employees × 40 pastes a week = 200,000 pastes, nearly all of them benign. At our
+measured rate that is **{{INTERRUPTIONS}}** — about one paste in twenty-five. We do not set
+that against an industry figure: the commonly quoted 51% measures something else (see §2).
 
-### Three operating points
+### Three operating points — and why they barely differ
 
 | Mode | τ | Recall | FPR |
 |---|---|---|---|
-| Audit | 0.30 | {{RECALL_AUDIT}} | {{FPR_AUDIT}} (log only, never blocks) |
+| Audit | 0.30 | {{RECALL_AUDIT}} | {{FPR_AUDIT}} — log only, never blocks |
 | **Balanced** (default) | **0.55** | {{RECALL_BALANCED}} | **{{FPR_BALANCED}}** |
 | Strict | 0.20 | {{RECALL_STRICT}} | {{FPR_STRICT}} |
 
-The threshold slider in the console re-thresholds **cached** per-item `p_block` scores, so
-the sweep is exact and instant. We label it as cached; it is not 1,000 fresh inferences.
+**These three rows are nearly identical, and we know why.** 98.1% of the run's scores sit
+below 0.05 or above 0.95, so moving the threshold moves almost nothing. The cause was a bug
+in how the score was computed: when the model was confident, every label except one was
+dropped before normalising, so 812 of 1000 benign scores came out exactly 0.0 and no
+temperature setting could spread them. **It is fixed in the code and covered by tests, but
+the fix was never re-run against the live model**, and no calibration temperature was ever
+fitted. The threshold slider in the console is honest about the scores it has; those scores
+just leave it little to do.
 
 ---
 
-## 8. Things we tested and rejected
+## 8. Design decisions
 
-| Thing | Why not |
+| Choice | Reason |
 |---|---|
-| **CUDA MPS** | +10% aggregate throughput, but mean TTFT 16,726 ms → 27,142 ms (**+62%**), measured on this box. Airlock is a keystroke-path product; TTFT is the only latency that matters. |
-| **vLLM sleep mode** | Level 1 "offloads weights to CPU RAM". On GB10 that is the same DRAM. You free nothing physical; you move a pointer. |
-| **Speculative decoding on the VLM** | MTP amortises over long generations. We emit ≤8 output tokens. Kept on the 35B, where it is worth ~2.7×. |
-| **A third GPU process for embeddings** | bge-small is 67 MB. A CUDA context costs 300–500 MB plus its own compile warm-up plus SM time. Runs on the 20 Arm cores via ONNX Runtime instead. |
-| **GridFS for evidence crops** | Two collections, a second round trip, and loss of atomicity — the crop and its verdict could not be written in one operation. Crops are far under the 16 MB BSON limit, so `BinData` in the decision document. |
-| **Queryable Encryption** | Enterprise/Atlas only. We ship AES-GCM with a key in a 0600 file that never leaves the box, and say so rather than implying otherwise. |
-| **gRPC for the middleware path** | OpenShell's inference router speaks HTTP. Protobuf costs an hour and buys nothing. |
+| **No third GPU process for embeddings** | bge-small is 67 MB. A GPU context costs far more than that plus its own warm-up. It runs on the CPU. |
+| **Prefix caching on, speculative decoding (MTP) off** for the text model | On this vLLM build the two are mutually exclusive, and the classifier sends the same long system prompt every call. We kept the cache (`stack/launch_text.sh`). |
+| **Reasoning disabled for classification** (`enable_thinking=False`) | With it on, the model spent its whole 200-token budget thinking and never produced the JSON verdict. Off: 8 tokens, clean JSON, 236 ms (`services/inspect/tiers/t3.py`). |
+| **Evidence stored as `BinData`, not GridFS** | Crops are far under the 16 MB document limit; GridFS costs two collections, a second round trip, and atomicity. |
+| **AES-GCM with a local key, not Queryable Encryption** | Queryable Encryption is Enterprise/Atlas only. We say so rather than implying otherwise. |
 
 ---
 
 ## 9. Honest boundaries
 
-- **MongoDB Community runs without auth on loopback** in this deployment.
-- **Queryable Encryption is the production path and is unavailable in Community.** Evidence
-  crops are AES-GCM encrypted with a local key file; full-resolution originals are *never*
-  persisted — storing the data you just blocked from leaving is indefensible for a DLP
-  product.
-- **The MAIN-world `fetch` patch is the unmanaged-browser approximation** of a
-  policy-force-installed extension with blocking `webRequest`. In a managed fleet you would
-  use the real thing.
-- **The clipboard interceptor necessarily runs on the host.** A sandbox cannot and should
-  not observe a paste event — that would require display-server access. Our host-side claim
-  is architectural (loopback-only binding, no cloud SDK linked) and demonstrated the only
-  honest way: with the ethernet cable on the table.
-- **`@openclaw/policy` verifies config-level conformance only.** It does not enforce tool
-  calls at request time. Runtime enforcement is OpenShell's proxy. We say this ourselves
-  rather than letting it be discovered.
-- **Our sensitive corpus is synthetic**, so recall is an upper bound. The benign corpus is
-  human-written, which is why FPR is the number we stand behind.
-- **Out of scope, stated plainly:** fleet deployment, endpoint management,
-  screen-photography threat vectors, and anything requiring synthetic input injection.
+- **Hardware access ended before several planned measurements were taken:** the ablation,
+  the throughput sweep, seats per box, temperature calibration, and a re-run after the
+  score-computation fix. Each is marked "not measured" where it would have appeared.
+- **The image path is not interactive** with the 30B vision model on the box, and the demo
+  chart did not block. Both are reported above.
+- **The false-positive rate missed our under-1% design target.** It is 4.00%.
+- **Our sensitive corpus is synthetic**, so recall is an upper bound.
+- **Adjudication had one reviewer.** No inter-rater claim is made.
+- **MongoDB Community runs without authentication on loopback** in this deployment.
+- **The browser extension's origin allowlist** accepts any extension ID until
+  `AIRLOCK_EXTENSION_ID` is set, because an unpacked extension's ID differs per machine.
+- **Out of scope:** fleet deployment, endpoint management, screenshots and photographs of
+  the screen.
 
 ---
 
 ## 10. Stack
 
-{{STACK_PARAGRAPH}}
+Airlock runs on a Dell Pro Max with GB10 (driver 580.159.03). Inference is served by vLLM
+from local weights: **Nemotron-3.5-Lightning-30B-A3B (NVFP4)** for text classification and
+for answering the employee's question, and **Nemotron-3-Nano-Omni-30B-A3B (BF16)** for
+images. The agent sandbox runs under **NemoClaw with OpenShell 0.0.44**, whose
+deny-by-default egress policy and inference router produce the evidence in §4. We planned to
+run an OpenClaw agent inside that sandbox for the local answer; **in the build as captured,
+the local answer is served by the host gateway's `/v1/answer`**, and we make no OpenClaw
+claim. MongoDB (Atlas Local) holds the policy corpus, the decision log and telemetry.
 
 ---
 
 ## Attachments
 
-| File | Proves |
+| File | What it shows |
 |---|---|
 | `data/benign_v1.jsonl` + manifest + `ATTRIBUTION.md` | the denominator, with per-record provenance |
-| `data/sensitive_v1.jsonl` + manifest | the recall side and the hard-negative bucket |
+| `data/sensitive_v1.jsonl` + manifest | the recall side and the 50 hard negatives |
 | `bench/build_benign.py`, `bench/run_fpr.py`, `bench/report.py` | the harness, reproducible from one seeded command |
-| `results/fpr_report.json` | every number in this document, machine-readable |
-| `results/false_positives.md` | every false positive, itemised and adjudicated |
-| `results/roc.png`, `pr.png`, `reliability.png` | log-scale ROC, PR with AP, calibration before/after |
-| `results/proof_*.log` | two models resident in one pool, no VRAM bar |
-| `evidence/rule02-providers.txt` | **Rule 02 as a machine-checkable fact** |
-| `evidence/policy-denied.json` | the raw egress denial the browser layer mirrors byte-for-byte |
-| `evidence/airlock-policy.json` | applied presets with their `verification` field |
-| `services/inspect/policy.yaml` | the nine clauses |
-| `stack/openshell-policy.toml`, `policy/*` | the reviewable policy artifacts |
-| `tests/test_t1.py` | the deterministic detectors, with passing output |
+| `results/fpr_report.json` | every computed number in this document |
+| `results/adjudication.md` | all 40 false positives, each categorised with a reason |
+| `results/t1_offline.json`, `results/t0_fastpath.md`, `results/t3_latency.md` | T1 offline, the T0 probe, the image-path run |
+| `results/proof_*.log` | both models resident in one pool, read without a VRAM bar |
+| `evidence/rule02-providers.txt`, `evidence/policy-denied.json` | the sandbox's inference and egress record |
+| `services/inspect/policy.yaml` | the nine policy clauses |
+| `tests/` | 88 tests, including regressions for every bug fixed after the run |
+
+`results/roc.png`, `pr.png` and `reliability.png` are **not** offered as evidence: they were
+drawn by the earlier tooling that counted the 50 hard negatives as positives, and the
+per-item data needed to redraw them was not kept.

@@ -2,7 +2,7 @@
 
 **Airlock intercepts the clipboard payload the moment company data is about to leave a
 laptop for an unapproved cloud AI tool, inspects it locally on a Dell Pro Max with GB10,
-blocks it with a cited policy clause, and re-routes the question to a 35B model on the box
+blocks it with a cited policy clause, and re-routes the question to a 30B model on the box
 so the employee still gets an answer.**
 
 Nothing leaves the machine. Every verdict reports `bytes_egressed: 0`, and the agent
@@ -23,8 +23,13 @@ none is typed in by hand.
 | Recall | **98.50%  [96.77%, 99.31%]  (394/400)** — synthetic set, so an **upper bound** |
 | Hard negatives wrongly blocked | 1/50 = 2.0%  [0.4%, 10.5%] — reported as its own line |
 | Threshold | 0.55 (Balanced), selected on dev, reported on test |
-| Published industry average | 51% → **12.8× better** |
-| Interruption tax | 8,000/week at 5,000 employees × 40 pastes, vs 102,000 at the industry average |
+| Adjudicated | 38/1000 = 3.80% [2.78%, 5.17%] after removing 2 correct blocks — see `results/adjudication.md` |
+| Interruption tax | ~8,000 wrong blocks a week at 5,000 employees × 40 pastes — about one paste in 25 |
+
+> **No industry multiplier.** The often-quoted 51% ([Cyberhaven survey](https://www.cyberhaven.com/blog/dlp-false-positives))
+> is the share of DLP *alerts* that are wrong; ours is the share of *benign pastes* blocked.
+> Like for like, our share of wrong blocks matches 51% at ~3.8% prevalence — the same range,
+> not better. An earlier version of this README claimed "12.8× better"; that was wrong.
 
 **Zero false positives across 480 items** of Stack Exchange, Wikipedia, MBPP and HumanEval
 — the code and technical prose an engineer actually pastes.
@@ -148,42 +153,39 @@ three-way split by access pattern:
 
 ## Status
 
-**Working and measured:** the detector end to end, the corpus and harness, the Mongo
-layer, the console and WebSocket feed, the block overlay, the stack egress artifacts, a
-recorded demo.
+**The GB10 is no longer available.** Measurement is over; the numbers above are final.
+`PLAN.md` lists what was never measured and why.
+
+**Working and measured:** the detector end to end on live models, the corpus and harness,
+the Mongo layer, the console and WebSocket feed, the block overlay, the sandbox egress
+evidence, the T0 fast path (40/40, p50 4.8 ms), and a recorded demo.
 
 **Known limitations — stated here rather than discovered:**
 
-- **`p_block` is saturated.** 98.1% of items sit below 0.05 or above 0.95. The threshold
-  slider therefore barely moves (FPR 4.70% → 4.00% across τ 0.20 → 0.55) and recall is
-  identical at all three operating points. The verdict-based and score-based FPRs now
-  agree, so the headline is sound, but the operating-point story is weak and the
-  calibration curve is fitted to two spikes.
-- **Escalation is 99.8%, not the ~14% the design assumed.** The benign corpus has a
-  200-character floor and T0 only fires below 40, so T0 cannot fire on it by construction.
-  This makes the **FPR conservative** — every item reached the model, nothing was resolved
-  by a cheap length check — but it makes escalation rate, blended latency and
-  seats-per-box measured here unrepresentative of a real paste distribution. A separate
-  T0 probe set (`data/shortpaste_v1.jsonl`) demonstrates the fast path works.
-- **CFPB contributes 29 of 40 false positives** while being 12% of the corpus. Its
-  narratives are consumers' personal financial grievances containing identifiers, which
-  our own POL-004/POL-005 cover — so CFPB was a poor choice of *benign* source. We report
-  the measured rate and give the ex-CFPB figure only as a labelled sensitivity analysis,
-  never as the headline.
-- **The sensitive corpus is synthetic**, so recall is an upper bound. The benign corpus is
-  human-written, which is why **FPR is the number we stand behind**.
-- **Language is not a driver.** We pre-registered the hypothesis that the multilingual
-  corpus would skew the FP list and checked it: latin 7.0%, cjk 8.6%, cyrillic 0/20 —
-  overlapping intervals, no effect. Reported as a negative result.
-- MongoDB Community runs without auth on loopback; Queryable Encryption is the production
-  path and is Enterprise/Atlas only, so evidence is AES-GCM encrypted with a key in a 0600
-  file that never leaves the box.
+- **The false-positive rate missed the under-1% design target.** It is 4.00%.
+- **Most errors are one fixable kind.** 12 of the 33 genuine classifier errors fired on
+  CFPB's `XXXX` redaction masks, read as card numbers or SSNs; 13 more are consumer
+  credit-dispute letters labelled LEGAL_HR. **We previously said CFPB blocks were
+  defensible because the narratives contain identifiers. They don't — CFPB redacts them.**
+- **The scores barely spread, so the operating points barely differ.** 98.1% of scores
+  sat below 0.05 or above 0.95 because of a bug that dropped absent labels before
+  normalising (812 of 1000 were exactly 0.0). Fixed in `calib.py` with tests — **but the
+  fix was never re-run against the live model**, and no calibration temperature was fitted.
+- **Escalation is 99.8%.** The corpus has a 200-character floor and T0 fires below 40, so
+  T0 cannot fire on it. That makes the FPR conservative and any throughput figure from this
+  corpus unrepresentative — so none is reported.
+- **The image path is not interactive.** 10–20 s per image with the 30B vision model, and
+  the demo chart did not block (`results/t3_latency.md`).
+- **The sensitive corpus is synthetic**, so recall is an upper bound.
+- **Language is not a driver.** Pre-registered and checked on the final run: latin 38/944,
+  cjk 2/35, cyrillic 0/20 — overlapping intervals, no effect.
+- **Adjudication had one reviewer**; no inter-rater claim is made.
+- MongoDB Community runs without auth on loopback; evidence is AES-GCM encrypted with a key
+  in a 0600 file, because Queryable Encryption is Enterprise/Atlas only.
 
-**Correction (Oct 2026):** recall was first published here as 87.78% (395/450). That
-counted the 50 hard negatives — which are labelled BENIGN — as recall targets, so 49
-correct allows were scored as misses. The true figure is 394/400 = 98.50%. Fixed in
-`bench/run_fpr.py` and `bench/report.py`, with a regression test that fails on the old
-code (`tests/test_report_recall.py`).
+**Corrections (Oct 2026):** recall was first published here as 87.78% (395/450) — the
+tooling counted the 50 hard negatives as recall targets; the true figure is 394/400 =
+98.50%. And the "12.8× better than industry" claim compared two different metrics.
 
 **Outstanding:** see `PLAN.md`.
 

@@ -1,257 +1,121 @@
-# PLAN.md — what is left, and the bugs found in the October audit
+# PLAN.md — project status after the GB10
 
-Audit run 2026-10-13 against `main` @ `34d01a6`. All three dev branches fully merged;
-nothing stranded. **69 tests green.** Every finding below was reproduced, not inferred —
-the command that proves it is listed with it.
+**Updated 2026-10-13. The GB10 is no longer available, so measurement is over.** The
+numbers in `results/` are final. What remains is keeping every written claim tied to them,
+plus a few tasks that need a person rather than a GPU.
 
----
-
-## Where we actually are
-
-| | Status |
-|---|---|
-| Detector T0 / T1 / T2 | working, measured on live models |
-| Benign corpus | 1000 items, 6 real sources, 0 hash mismatches, scored set == corpus exactly |
-| **FPR** | **4.00% [2.95%, 5.40%]** (40/1000), verdict and p_block agree |
-| **Recall** | **98.50% [96.77%, 99.31%]** (394/400) — *corrected this audit, was published as 87.78%* |
-| Hard negatives wrongly blocked | 1/50 = 2.0% [0.4%, 10.5%] |
-| Mongo, console, WebSocket, overlay | working; overlay verified in a real browser |
-| Stack evidence | `rule02-providers.txt`, `policy-denied.json`, `proof_*.log` present |
-| Screenshots, demo PNG, demo video | present |
-| Ablation table | **missing** |
-| `SUBMISSION.final.md` | **not generated** |
-
----
-
-## Bugs — fixed in this audit
-
-### F1. Recall counted hard negatives as recall targets — **fixed** (C)
-
-The sensitive corpus holds 400 sensitive items plus 50 `HARD_NEGATIVE` items labelled
-BENIGN. Both `run_fpr.py` and `report.py` put all 450 in the recall denominator, so 49
-*correct* allows were scored as misses.
-
-```
-published   395/450 = 87.78%
-correct     394/400 = 98.50%  [96.77%, 99.31%]
-```
-
-It also produced a `BENIGN: 1/50` row in `by_class`, and left the hard-negative FP line
-SRS §14 asks for by name unreported. **B's slider inherited the error** — it computes
-recall from the same float list. Fixed at the source in `run_fpr.py`, so B's code needs no
-change. `tests/test_report_recall.py` fails on the old code (recall 0.78 vs 0.95,
-`BENIGN` in `by_class`) and passes on the fix.
-
-The README published the wrong figure on Sept 1; corrected, with a dated note saying so.
-
-### F2. `HARD_NEGATIVE_RESULT` was a hand-filled placeholder — **fixed** (C)
-
-`fill.py` now fills it from `fpr_report.json`. One fewer number typed by hand.
-
-### F3. Lint in C's files — **fixed** (C)
-
-Unused imports and placeholder-less f-strings. Cosmetic; no behaviour change.
-
----
-
-## Bugs — fixed in the follow-up (applied to A's and B's files at the team's request)
-
-All verified live and pinned by `tests/test_audit_fixes.py` — 15 of its 19 tests fail on
-the pre-fix code; the other 4 are preservation tests that must pass on both.
-
-| | Fix | Verified |
-|---|---|---|
-| **B1** | `services/inspect/origins.py`: public tier (`/healthz`, `/v1/inspect`, `/v1/policy`) stays open — the content-script fallback needs it; everything else allowlisted. Refused on the request itself, not only the preflight. WebSocket checks `Origin` too (browsers apply no CORS to WS). `/v1/decisions` no longer ships `evidence_spans`, `payload_sha256` or ciphertext. | `evil.example`: OPTIONS 204→**403**, GET 200→**403**, POST feedback 200→**403**. Extension, localhost pages and curl unchanged. |
-| **B2** | `mode: 'closed'`; card renders only evidence-bearing lines ±1 of context. `ctxPayload` untouched so the local-answer button still gets the full text. | From page JS: `shadowRoot === null`, 0 chars readable. Card and console still render. |
-| **B3** | Absent labels floored at the smallest top-k logprob instead of dropped. | Confident-model fixture: was `0.0` at T=1/3/8, now `p1 < p3 < p8`. |
-| **B4** | `/v1/feedback` returns 503 when nothing was written. B's overlay already handled a non-ok body correctly — the server was lying to it. | Mongo-down feedback no longer answers `embedded:true`. |
-| **B7** | Two `@app.on_event` handlers → one `lifespan`, same order. | Deprecation warnings 5 → 1 (the remaining one is Starlette's own `httpx` notice). |
-| plan #3 | `run_fpr.py` records `p_block_source`; `report.py` counts it. | Fallback rate becomes a number on the next run. |
-
-## Bug detail
-
-Struck through = fixed above. **Still open: B5, B6, B8.**
-
-### ~~B1~~ FIXED — Any website can read blocked secrets and poison the detector — **HIGH** (A)
-
-The gateway sends `Access-Control-Allow-Origin: *` with
-`Access-Control-Allow-Private-Network: true` and checks no origin anywhere. Proven against
-the live service with `Origin: https://evil.example`:
-
-```
-OPTIONS /v1/decisions   → 204, allow-origin *, allow-private-network true
-GET     /v1/decisions   → 200, allow-origin *
-POST    /v1/feedback    → 200, {"ok":true,"embedded":true}
-```
-
-Two consequences:
-
-- **`/v1/decisions` returns `evidence_spans`** — the literal blocked substrings, e.g. the
-  customer row. Any page the employee visits can read back every secret Airlock stopped.
-  For a DLP product the audit log is the worst place to have an exfiltration path.
-- **`/v1/feedback` accepts writes**, so any page can mark decisions benign and teach the
-  detector to stop blocking a pattern.
-
-Chrome 142+ Local Network Access puts a permission prompt in front of public sites, which
-blunts this — but not for other `localhost` origins, not in other browsers, and the server
-itself has no defence at all.
-
-**Fix:** replace `*` with an allowlist — the extension's `chrome-extension://<id>` origin
-and `http://localhost:5173`. Reject any other `Origin` with 403 on every route, not just
-OPTIONS. Then project `evidence_spans` out of `/v1/decisions` — the console shows host,
-label, tier and latency, and never needs the span text.
-
-**Verify:** the three curls above with `Origin: https://evil.example` must all return 403.
-
-### ~~B2~~ FIXED — The block card renders the blocked payload into the destination site's DOM — **HIGH** (B)
-
-`extension/overlay.js:251` — `host.attachShadow({ mode: 'open' })`. The card shows the
-payload with the offending row underlined, inside an *open* shadow root in the page we are
-blocking it from. Any script on `chatgpt.com` can read `host.shadowRoot.textContent` — and
-so can any DOM-capturing session-replay tool the site runs, which is the realistic vector.
-
-**Fix:** `mode: 'closed'`, and render the payload masked except the evidence span itself.
-The robust version is the extension side panel rather than in-page DOM.
-
-**Checked and clean, worth saying:** every model-influenced field in the card — `reason`,
-`label`, clause text, the payload itself — goes through `esc()` before `innerHTML`. No XSS
-via a crafted paste.
-
-### ~~B3~~ FIXED — `p_block` cannot be calibrated as written — **HIGH** (A)
-
-98.1% of scores sit at the extremes, and **812 of 1000 are exactly 0.0**. A softmax over
-nine labels cannot produce an exact zero, so for those 812 pastes BENIGN was the only label
-in the dict. Cause, `calib.py` `label_logits_from_logprobs`:
-
-```python
-return {lb: math.log(m) for lb, m in mass.items() if m > 0}
-```
-
-Labels absent from the top-20 are dropped entirely, so `p_block_from_logits` renormalises
-over BENIGN alone and returns exactly 0.0 — **at every temperature**. Proven against A's own
-functions:
-
-```
-CURRENT  T=1.0 → 0.0     T=3.0 → 0.0      T=8.0 → 0.0
-FLOORED  T=1.0 → 0.0001  T=3.0 → 0.1471   T=8.0 → 0.6549
-```
-
-**Fix (one line):** floor each absent label at the smallest observed top-k logprob — a
-valid upper bound on its mass:
-
-```python
-floor = min(c["logprob"] for c in entry["top_logprobs"])
-return {lb: (math.log(m) if m > 0 else floor) for lb, m in mass.items()}
-```
-
-**Also:** no `results/calibration.json` exists, so **T has been 1.0 the entire time** —
-temperature scaling was never applied. After the fix, run `bench/fit_calibration.py` on the
-200-item dev split. And record each score's `source` (logprobs vs verbalized) in the run
-output: right now the fallback rate is unauditable.
-
-**What it unblocks:** the threshold slider, three distinct operating points, a real
-reliability diagram, a meaningful ECE. Today all four are cosmetic.
-
-### ~~B4~~ FIXED — `/v1/feedback` reports success when nothing was written — **MEDIUM** (A)
-
-`app.py:540-541`:
-
-```python
-corpus_id = await mongo.write_back_corpus(decision_id)
-return {"ok": True, "corpus_id": str(corpus_id), "embedded": True}
-```
-
-`write_back_corpus` returns `None` when Mongo is down, the decision is missing, or there is
-nothing to embed. The endpoint still answers `"embedded": true` with
-`"corpus_id": "None"` — observed live. The analyst clicks *Mark benign*, sees success, and
-nothing happened. That is demo beat 4 failing silently.
-
-**Fix:** `if corpus_id is None: return 503 with the fail-closed body`.
-
-### B5. T2 latency is ~3× its target — **MEDIUM** (A)
-
-NFR-L3 is p95 ≤ 600 ms; measured ~1.7 s single-paste, and the T2 budget was raised to
-2.0 s to make the run pass. The cause is model choice, not code: §5.1 sized the budget for
-a 4B on a dedicated `:8002`; we run T2 on the 30B. Options, in order of cost: report it
-honestly as measured; or launch the 4B classifier with text dropped to 0.34 per SRS §7.3
-(sum 0.34 + 0.28 + 0.09 = 0.71, under the 0.85 ceiling).
-
-### B6. Escalation is 99.8% — **documented, not a code bug**
-
-The benign corpus has a 200-char floor and T0 fires below 40, so T0 cannot fire on it.
-Makes the FPR conservative and the throughput numbers unrepresentative. Stated in the
-README and SUBMISSION.md. `data/shortpaste_v1.jsonl` exists to show T0 works —
-**it has never been run against the service.**
-
-### ~~B7~~ FIXED — `@app.on_event` is deprecated — **LOW** (A)
-
-`app.py:74` and `:80`. Works today; removed in a future FastAPI. Move to a `lifespan`
-handler. Also `starlette.testclient` warns about `httpx` — pin or move to `httpx2`.
-
-### B8. The committed manifest predates the provenance gate — **LOW** (C)
-
-`data/benign_v1.manifest.json` has no `sources_used` / `provenance_ok` fields, because the
-corpus was rebuilt on the box before the gate landed. The corpus itself passes (6 sources,
-max share 40% < 55%), but the attestation is not in the artifact. Re-run
-`build_benign.py --seed 1337` on the box; the seed makes it deterministic.
-
----
-
-## The plan
-
-### Phase 1 — fix what changes the numbers (≈1.5 h)
-
-| # | Task | Owner | Done when |
-|---|---|---|---|
-| 1 | ~~B3 floor absent labels~~ **done** | — | re-run confirms the 0.0 count drops |
-| 2 | Run `bench/fit_calibration.py` on the dev split | A | `results/calibration.json` exists, T ≠ 1.0 |
-| 3 | ~~Record `p_block_source`~~ **done** | — | |
-| 4 | Re-run `run_fpr.py` with the sensitive split | box | `scores_sensitive.json` on disk, recall 394/400 reproduced |
-| 5 | `report.py` | C | recall 98.5%, hard-negative line present, slider spread visible |
-
-### Phase 2 — fix what is unsafe (≈1 h)
-
-| # | Task | Owner | Done when |
-|---|---|---|---|
-| 6 | ~~B1~~ **done** | — | |
-| 7 | ~~B2~~ **done** | — | |
-| 8 | ~~B4~~ **done** | — | |
-
-### Phase 3 — finish the evidence (≈2 h)
-
-| # | Task | Owner | Done when |
-|---|---|---|---|
-| 9 | Ablation rows 2–4 | A | `results/ablation_table.md` with 4 rows |
-| 10 | Run the T0 probe set against the service | box | 40/40 `tier=T0`, reported as its own line |
-| 11 | Hand-adjudicate the 40 FPs | C | `false_positives.md` annotated, corrected count stated |
-| 12 | Re-run `build_benign.py` for the manifest attestation | box | `provenance_ok: true` in the manifest |
-
-### Phase 4 — ship (≈30 min)
-
-| # | Task | Owner | Done when |
-|---|---|---|---|
-| 13 | `python submission/fill.py` | C | `grep -c '{{' SUBMISSION.final.md` → 0 |
-| 14 | Re-check every number in README / PITCH against `fpr_report.json` | C | no drift |
-| 15 | **B5** (B7 done) | A | optional — honest reporting is acceptable |
-
-**Critical path:** 1 → 2 → 4 → 5 → 9 → 13. Everything in Phase 2 can run in parallel with
-it, and should — B1 and B2 are the two findings a security-minded judge would raise first.
-
----
-
-## Checks to run after every phase
+Check that nothing has drifted, at any time:
 
 ```bash
 .venv/bin/python -m pytest tests/ -q
 ```
 
 ```bash
-python bench/report.py && python -c "import json;d=json.load(open('results/fpr_report.json'));print(d['reportable'],d['verdict_fpr_statement'],d['recall_statement'],d['hard_negative']['statement'],d['p_block_saturated_frac'])"
+.venv/bin/python submission/check_claims.py
 ```
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' "localhost:8787/v1/decisions?limit=1" -H "Origin: https://evil.example"
+.venv/bin/python submission/fill.py
 ```
 
-Expect: tests green · `reportable True` · recall ≈98.5% · saturation well under 0.98 after
-B3 · `403` after B1.
+Expect 88 passing tests, every claim `ok`, and `no placeholders remain`.
+
+---
+
+## Final measured results
+
+| | Value | Source |
+|---|---|---|
+| False-positive rate | **4.00% [2.95%, 5.40%]** (40/1000) | `results/fpr_report.json` |
+| After adjudication | 38/1000 = 3.80% (2 blocks were correct — live credentials in the corpus) | `results/adjudication.md` |
+| Recall (synthetic) | **98.50% [96.77%, 99.31%]** (394/400) | `results/fpr_report.json` |
+| Hard negatives blocked | 1/50 | `results/fpr_report.json` |
+| Code & technical text | 0 false positives in 480 items | `results/fpr_report.json` |
+| T1 with no model | 0/1000 benign blocked; 105/400 sensitive blocked | `results/t1_offline*.json` |
+| T0 fast path | 40/40 resolved, p50 4.8 ms | `results/t0_fastpath.md` |
+| Image path | 10–20 s per image; demo chart **not** blocked | `results/t3_latency.md` |
+| Memory, both models warm | 47,847 + 35,325 MiB resident, 25.06 GB free | `results/proof_*.log` |
+| Sandbox egress | 1 local inference endpoint; 4 cloud APIs → 403 | `evidence/rule02-providers.txt` |
+
+---
+
+## Done in the October audit
+
+**Reporting bugs (would have put wrong numbers in the submission):**
+
+- **Recall** counted the 50 hard negatives as recall targets: published 87.78%, true 98.50%.
+  Fixed in `run_fpr.py` / `report.py`; `results/fpr_report.json` corrected from its own
+  per-class counts, with the derivation recorded in the file.
+- **The industry comparison was invalid.** "12.8× better than the 51% industry average"
+  divided a false-positive *rate* by a survey's share of wrong *alerts*. Withdrawn
+  everywhere; the like-for-like comparison is in `SUBMISSION.md` §2.
+- **The CFPB explanation was wrong.** We said its blocks were defensible because the
+  narratives contain identifiers; CFPB redacts them to `XXXX`, and the model mistook the
+  masks for card numbers. Corrected everywhere.
+- **The submission described the planned system, not the measured one:** a Qwen 35B, a
+  Holo 7B and a 4B classifier that never ran, a throughput sweep "run twice" that never ran,
+  NVIDIA baseline exclusions never applied, a cable unplug never captured, and ROC / PR /
+  reliability figures drawn with the hard negatives counted as positives. All rewritten or
+  withdrawn. `submission/check_claims.py` now verifies 35 hand-written numbers against
+  their source files.
+
+**Code bugs (fixed and pinned by `tests/test_audit_fixes.py`; 15 of its 19 tests fail on
+the old code):**
+
+| | Fix |
+|---|---|
+| B1 | Any website could read blocked secrets from `/v1/decisions` and write to `/v1/feedback`. Origin allowlist (`services/inspect/origins.py`), WebSocket included; blocked text and hashes removed from the decision feed. |
+| B2 | The block card rendered the secret in an open shadow root inside the destination site. Now closed, showing only evidence-bearing lines. |
+| B3 | 812/1000 scores were exactly 0.0 because absent labels were dropped before normalising; temperature could never move them. Floored instead. |
+| B4 | `/v1/feedback` reported success when nothing was written. Now 503. |
+| B7 | Deprecated FastAPI startup hooks replaced with a lifespan. |
+
+**Adjudication:** all 40 false positives reviewed — 2 correct blocks, 2 timeouts,
+3 borderline, 33 genuine errors (`results/adjudication.md`).
+
+---
+
+## Permanently not measured — needs hardware we no longer have
+
+Each is marked "not measured" in `SUBMISSION.md` rather than estimated.
+
+| | Why it matters |
+|---|---|
+| **Re-run after the B3 fix** | The scoring fix is verified by unit test only. Its effect on the real score distribution is unknown. |
+| **Temperature calibration** | No temperature was ever fitted; the calibration story rests on it. |
+| **Ablation rows 2–4** | Only row 1 (T1 alone) exists. |
+| **Throughput sweep, seats per box, cost per seat** | All derived from the sweep, which never ran. |
+| **Image false-positive rate** | Only four image calls were ever made. |
+| **Offline (cable-unplugged) demonstration** | Planned, never captured. |
+
+---
+
+## Still to do — needs a person, not a GPU
+
+| # | Task | Who | Why |
+|---|---|---|---|
+| 1 | **Find the 121 s demo recording.** It was never committed. If it only lived on the GB10, fall back to the 62 s cut: `git show 0878291:submission/airlock-demo.mp4 > airlock-demo.mp4`. Both show the superseded "recall 87.8%" on screen — narrate the correction (`submission/PITCH.md`). | B | the only recording of the real system |
+| 2 | **Second reviewer for `results/adjudication.md`.** Agree or disagree with each category, then report agreement. | anyone but C | an inter-rater figure cannot come from one reviewer |
+| 3 | **A human ⌘V test.** The recording used synthetic paste events. A real paste can be tested without the GB10 on any machine: load the extension, run the service with `MONGO_ENABLED=false`, paste an AWS-key-shaped string — T1 blocks it with no model. | B | B's own open note in `airlock-demo.md` |
+| 4 | **Pin `AIRLOCK_EXTENSION_ID`** for any real deployment. Until then any Chrome extension may call the restricted routes. | deployer | B1 hardening |
+| 5 | Keep `evidence/nemoclaw-status.json` and `evidence/nemoclaw-policy-list.txt` out of anything presented as evidence. They describe a different sandbox (`my-qwen-claw`, Qwen via Ollama, Hugging Face / npm / OpenRouter enabled), not Airlock's. | C | they undercut the egress claim |
+
+## If hardware becomes available again
+
+In this order — each one changes numbers that are currently final:
+
+1. Strip runs of `XXXX`-style redaction masks before classification — the largest error
+   class (12 of 33). Re-run the 1000-item harness.
+2. Re-run with the B3 fix, then fit the temperature on a held-out split.
+3. Ablation rows 2–4.
+4. A smaller vision model, and re-measure image latency.
+
+**One caveat on the link between code and numbers.** The published results describe the
+code as it ran in August. One fix since then touches scoring: B3 fills in labels that were
+missing from the model's top-20 instead of dropping them. That moves the 812 exact-0.0
+scores up slightly and the 16 exact-1.0 scores down slightly, so it should not flip any
+decision at τ = 0.55 — but that has not been confirmed on the live model. The other fixes
+(B1, B2, B4, B7) change no detection decision at all. Larger detector changes, like
+stripping redaction masks, were deliberately **not** made: changing what the detector does
+without being able to re-measure it would leave the published numbers describing code that
+no longer exists.

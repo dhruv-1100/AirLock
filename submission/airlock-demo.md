@@ -15,6 +15,18 @@ inference and not a replay.
 | ~100–115 s | **live console** | decisions off the MongoDB change stream, FPR 4.00% / recall 87.8% / n 1000, KV gauges scraped from both vLLM `/metrics` |
 | ~115–121 s | **policy evidence** | four cloud LLM hosts returning `403 policy_denied` from inside the sandbox; every inference request routed to one endpoint — the local 30B |
 
+## Correction (2026-10-13)
+
+- **The console in this recording shows "recall 87.8%". That figure is wrong.** The tooling
+  counted the 50 hard negatives — test cases that *should* be allowed — as recall targets.
+  The correct recall is **98.5% (394/400)**. The error understated us. The footage cannot be
+  re-recorded because the GB10 is no longer available; narrate the correction instead
+  (`submission/PITCH.md`).
+- **This 121 s file was never committed** — only the earlier 62 s cut was, and it was later
+  untracked. Recover the 62 s cut with
+  `git show 0878291:submission/airlock-demo.mp4 > airlock-demo.mp4`. It shows the same wrong
+  recall figure.
+
 ## Honest notes
 
 - The paste is a synthetic `ClipboardEvent` carrying a real `DataTransfer`, because the

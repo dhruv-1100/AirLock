@@ -1,0 +1,563 @@
+{
+  "corpus": "data/sensitive_v1.jsonl",
+  "n": 450,
+  "tier": "T1-only",
+  "t1_high_blocks": 105,
+  "t1_medium_escalations": 64,
+  "t1_high_rate": 0.23333333333333334,
+  "t1_high_ci95": [
+    0.19661270506502332,
+    0.2745682649973285
+  ],
+  "escalation_floor": 0.14222222222222222,
+  "by_confidence": {
+    "MEDIUM": 64,
+    "HIGH": 105
+  },
+  "by_label": {
+    "GOV_ID": 45,
+    "CREDENTIAL": 76,
+    "PAYMENT_CARD": 45,
+    "CUSTOMER_RECORD": 3
+  },
+  "by_source": {
+    "synthetic": {
+      "n": 400,
+      "high": 105,
+      "medium": 58
+    },
+    "hand-written hard negatives": {
+      "n": 50,
+      "high": 0,
+      "medium": 6
+    }
+  },
+  "high_items": [
+    {
+      "_id": "sensitive:credential:57",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:23",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:21",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:6",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:38",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:21",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:30",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:58",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:28",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:44",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:41",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:39",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:3",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:11",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:35",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:43",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:14",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:14",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:17",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:27",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:18",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:22",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:40",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:36",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:0",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:49",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:13",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:26",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:10",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:29",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:36",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:45",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:22",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:12",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:24",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:68",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:2",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:16",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:13",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:6",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:25",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:67",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:20",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:15",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:35",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:64",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:9",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:40",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:60",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:4",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:7",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:39",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:1",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:54",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:8",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:19",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:0",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:59",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:7",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:30",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:63",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:19",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:65",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:34",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:5",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:62",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:47",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:10",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:38",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:16",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:43",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:17",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:24",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:26",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:28",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:55",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:9",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:8",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:29",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:20",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:31",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:2",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:37",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:11",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:33",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:12",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:42",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:34",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:51",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:46",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:23",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:32",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:27",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:32",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:18",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:44",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:69",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:41",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:31",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:66",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:25",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:5",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:4",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:credential:53",
+      "label": "CREDENTIAL",
+      "confidence": "HIGH"
+    },
+    {
+      "_id": "sensitive:payment_card:37",
+      "label": "PAYMENT_CARD",
+      "confidence": "HIGH"
+    }
+  ],
+  "medium_items": []
+}

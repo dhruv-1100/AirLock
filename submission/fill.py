@@ -41,7 +41,6 @@ MANUAL = {
     "ABLATION_TABLE": "A — the four-row ablation",
     "INTER_RATER": "C — n reviewed, disagreements, Cohen's κ",
     "ADJUDICATION": "C — from results/false_positives.md, after hand review",
-    "OVERRIDE_RATE": "A — span-verification override rate",
     "INTERRUPTIONS": "C — 200,000 × measured FPR",
     "T0_PROBE_RESULT": "C — run bench/build_shortpaste.py then run_fpr.py against it",
 }
@@ -152,6 +151,16 @@ def build_map(r: dict) -> dict[str, str]:
         for k, v in r["tier_mix"].items():
             rows.append(f"| {k} | {v['n']} | {v['pct']}% |")
         m["TIER_MIX_TABLE"] = "\n".join(rows)
+    # Span-verification override rate, counted from the per-item run output rather than
+    # typed in — the run recorded `override` on every item.
+    try:
+        _sc = json.loads(Path("results/scores_benign.json").read_text())
+        _it = _sc["items"] if isinstance(_sc, dict) else _sc
+        _ov = sum(1 for x in _it if x.get("override") == "unverified_evidence")
+        m["OVERRIDE_RATE"] = (f"{_ov}/{len(_it)} = {_ov / len(_it) * 100:.1f}% of benign pastes "
+                              f"were forced to BENIGN because the model could not quote its evidence")
+    except Exception:  # noqa: BLE001
+        pass
     hn = r.get("hard_negative") or {}
     if hn.get("n"):
         m["HARD_NEGATIVE_RESULT"] = (
